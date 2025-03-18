@@ -18,6 +18,49 @@ class ApiService {
     return _handleResponse(response);
   }
 
+  static Future<dynamic> get(String endpoint) async {
+    final response = await http
+        .get(
+          Uri.parse('$_baseUrl/$endpoint'),
+          headers: {'Content-Type': 'application/json'},
+        )
+        .timeout(AppConstants.apiTimeout);
+
+    return _handleResponse(response);
+  }
+  static Future<dynamic> put(String endpoint, dynamic body) async {
+    final response = await http
+        .put(
+          Uri.parse('$_baseUrl/$endpoint'),
+          headers: {'Content-Type': 'application/json'},
+          body: jsonEncode(body),
+        )
+        .timeout(AppConstants.apiTimeout);
+
+    return _handleResponse(response);
+  }
+  static Future<dynamic> delete(String endpoint) async {
+    final response = await http
+        .delete(
+          Uri.parse('$_baseUrl/$endpoint'),
+          headers: {'Content-Type': 'application/json'},
+        )
+        .timeout(AppConstants.apiTimeout);
+
+    return _handleResponse(response);
+  }
+  static Future<dynamic> patch(String endpoint, dynamic body) async {
+    final response = await http
+        .patch(
+          Uri.parse('$_baseUrl/$endpoint'),
+          headers: {'Content-Type': 'application/json'},
+          body: jsonEncode(body),
+        )
+        .timeout(AppConstants.apiTimeout);
+
+    return _handleResponse(response);
+  }
+
   static dynamic _handleResponse(http.Response response) {
     switch (response.statusCode) {
       case 200:
