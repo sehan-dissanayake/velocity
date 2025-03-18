@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:frontend/features/auth/presentation/screens/welcome_screen.dart';
 import 'package:provider/provider.dart';
 import 'package:frontend/features/auth/provider/auth_provider.dart';
 import 'package:frontend/features/auth/presentation/screens/login_screen.dart';
@@ -22,7 +23,7 @@ class MyApp extends StatelessWidget {
           primarySwatch: Colors.blue,
           visualDensity: VisualDensity.adaptivePlatformDensity,
         ),
-        home: const LoginScreen(),
+        home: const WelcomeScreen(),
       ),
     );
   }
