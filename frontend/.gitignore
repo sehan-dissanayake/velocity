@@ -32,6 +32,11 @@ migrate_working_dir/
 .pub-cache/
 .pub/
 /build/
+/ios/
+/macos/
+/web/
+/linux/
+/windows/
 
 # Symbolication related
 app.*.symbols
@@ -43,3 +48,12 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# Generated files
+**/generated_plugin_registrant.dart
+
+# VS Code settings
+.vscode/
+
+# Temporary files
+*.tmp
