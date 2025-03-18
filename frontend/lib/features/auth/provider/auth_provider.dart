@@ -1,16 +1,38 @@
-import 'package:flutter/foundation.dart';
-import 'package:http/http.dart' as http;
 import 'package:frontend/core/utils/api_service.dart';
+import 'package:flutter/foundation.dart';
+import 'package:frontend/core/utils/storage_service.dart';
+import 'package:frontend/core/utils/auth_state.dart';
 
 class AuthProvider with ChangeNotifier {
-  bool _isLoading = false;
+  AuthState _state = AuthState.loading;
   String _errorMessage = '';
 
-  bool get isLoading => _isLoading;
+  AuthState get state => _state;
   String get errorMessage => _errorMessage;
 
+  Future<void> initialize() async {
+    try {
+      print('Initializing AuthProvider...');
+      _state = AuthState.loading;
+      notifyListeners();
+
+      final isLoggedIn = StorageService.isLoggedIn;
+      print('StorageService.isLoggedIn: $isLoggedIn');
+
+      _state = isLoggedIn ? AuthState.authenticated : AuthState.unauthenticated;
+      print('Initialization complete. State: $_state');
+    } catch (e) {
+      print('Initialization error: $e');
+      _state = AuthState.error;
+      _errorMessage = 'Initialization failed';
+    } finally {
+      notifyListeners();
+    }
+  }
+
   Future<void> login(String email, String password) async {
-    _isLoading = true;
+    _state = AuthState.loading;
+    _errorMessage = '';
     notifyListeners();
 
     try {
@@ -19,15 +41,21 @@ class AuthProvider with ChangeNotifier {
         'password': password,
       });
 
-      // Handle successful login
-      print('Login successful: $response');
-      _errorMessage = '';
+      await StorageService.setToken(response['token']);
+      await StorageService.setLoggedIn(true);
+      _state = AuthState.authenticated;
     } catch (e) {
+      _state = AuthState.error;
       _errorMessage = e.toString().replaceAll('Exception: ', '');
-      print('Login error: $_errorMessage');
     } finally {
-      _isLoading = false;
       notifyListeners();
     }
+  }
+
+  Future<void> logout() async {
+    await StorageService.deleteToken();
+    await StorageService.setLoggedIn(false);
+    _state = AuthState.unauthenticated;
+    notifyListeners();
   }
 }
