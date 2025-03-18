@@ -1,4 +1,5 @@
 const db = require('../config/db');
+const bcrypt = require('bcryptjs');
 
 const User = {};
 
@@ -12,5 +13,22 @@ User.findByEmail = (email, callback) => {
         callback(null, results[0]);
     });
 };
+
+User.create = (userData, callback) => {
+    bcrypt.hash(userData.password, 10, (err, hash) => {
+        if (err) return callback(err);
+        
+        const query = 'INSERT INTO users (email, password) VALUES (?, ?)';
+        db.query(query, [userData.email, hash], callback);
+    });
+};
+
+User.comparePassword = (candidatePassword, hash, callback) => {
+    bcrypt.compare(candidatePassword, hash, (err, isMatch) => {
+        if (err) return callback(err);
+        callback(null, isMatch);
+    });
+};
+
 
 module.exports = User;
