@@ -1,26 +1,21 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
-import 'package:frontend/features/auth/provider/auth_provider.dart';
-import 'package:frontend/features/auth/presentation/screens/sign_up_screen.dart';
 
-class LoginScreen extends StatefulWidget {
-  const LoginScreen({super.key});
+class SignUpScreen extends StatefulWidget {
+  const SignUpScreen({super.key});
 
   @override
-  State<LoginScreen> createState() => _LoginScreenState();
+  State<SignUpScreen> createState() => _SignUpScreenState();
 }
 
-class _LoginScreenState extends State<LoginScreen> {
+class _SignUpScreenState extends State<SignUpScreen> {
   final _formKey = GlobalKey<FormState>();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
 
   @override
   Widget build(BuildContext context) {
-    final authProvider = Provider.of<AuthProvider>(context);
-
     return Scaffold(
-      appBar: AppBar(title: const Text('Login')),
+      appBar: AppBar(title: const Text('Sign Up')),
       body: Padding(
         padding: const EdgeInsets.all(20.0),
         child: Form(
@@ -59,41 +54,14 @@ class _LoginScreenState extends State<LoginScreen> {
                 },
               ),
               const SizedBox(height: 20),
-              if (authProvider.errorMessage.isNotEmpty)
-                Text(
-                  authProvider.errorMessage,
-                  style: TextStyle(color: Theme.of(context).colorScheme.error),
-                ),
-              const SizedBox(height: 20),
               ElevatedButton(
-                onPressed:
-                    authProvider.isLoading
-                        ? null
-                        : () {
-                          if (_formKey.currentState!.validate()) {
-                            authProvider.login(
-                              _emailController.text.trim(),
-                              _passwordController.text.trim(),
-                            );
-                          }
-                        },
-                child:
-                    authProvider.isLoading
-                        ? const CircularProgressIndicator()
-                        : const Text('Login'),
-              ),
-              const SizedBox(height: 20),
-              TextButton(
                 onPressed: () {
-                  // Navigate to Sign Up Page
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => const SignUpScreen(),
-                    ),
-                  );
+                  if (_formKey.currentState!.validate()) {
+                    // Handle Sign Up Logic
+                    print('Signing up...');
+                  }
                 },
-                child: const Text("Don't have an account? Sign Up"),
+                child: const Text('Sign Up'),
               ),
             ],
           ),
