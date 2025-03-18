@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:frontend/core/utils/auth_state.dart';
 import 'package:frontend/features/auth/provider/auth_provider.dart';
+import 'package:frontend/features/auth/presentation/screens/sign_up_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -85,6 +86,19 @@ class _LoginScreenState extends State<LoginScreen> {
                                 .loading // Changed here
                         ? const CircularProgressIndicator()
                         : const Text('Login'),
+              ),
+              const SizedBox(height: 20),
+              TextButton(
+                onPressed: () {
+                  // Navigate to Sign Up Page
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => const SignUpScreen(),
+                    ),
+                  );
+                },
+                child: const Text("Don't have an account? Sign Up"),
               ),
             ],
           ),
