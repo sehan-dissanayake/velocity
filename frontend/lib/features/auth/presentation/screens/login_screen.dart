@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:frontend/core/utils/auth_state.dart';
 import 'package:frontend/features/auth/provider/auth_provider.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -66,7 +67,9 @@ class _LoginScreenState extends State<LoginScreen> {
               const SizedBox(height: 20),
               ElevatedButton(
                 onPressed:
-                    authProvider.isLoading
+                    authProvider.state ==
+                            AuthState
+                                .loading // Changed here
                         ? null
                         : () {
                           if (_formKey.currentState!.validate()) {
@@ -77,7 +80,9 @@ class _LoginScreenState extends State<LoginScreen> {
                           }
                         },
                 child:
-                    authProvider.isLoading
+                    authProvider.state ==
+                            AuthState
+                                .loading // Changed here
                         ? const CircularProgressIndicator()
                         : const Text('Login'),
               ),
