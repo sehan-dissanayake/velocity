@@ -1,0 +1,22 @@
+# Flutter
+frontend/.flutter-plugins
+frontend/.flutter-plugins-dependencies
+frontend/.metadata
+frontend/.dart_tool/
+frontend/build/
+frontend/android/gradle-wrapper.jar
+
+# Node.js
+backend/node_modules/
+backend/.env
+backend/ca.pem
+
+# General
+.DS_Store
+.env
+
+# Flutter desktop platform build directories
+frontend/windows/flutter/
+frontend/macos/Flutter/
+frontend/linux/flutter/
+frontend/ios/Flutter/
