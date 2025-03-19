@@ -28,6 +28,7 @@ class ApiService {
 
     return _handleResponse(response);
   }
+
   static Future<dynamic> put(String endpoint, dynamic body) async {
     final response = await http
         .put(
@@ -39,6 +40,7 @@ class ApiService {
 
     return _handleResponse(response);
   }
+
   static Future<dynamic> delete(String endpoint) async {
     final response = await http
         .delete(
@@ -49,6 +51,7 @@ class ApiService {
 
     return _handleResponse(response);
   }
+
   static Future<dynamic> patch(String endpoint, dynamic body) async {
     final response = await http
         .patch(
@@ -63,7 +66,7 @@ class ApiService {
 
   static dynamic _handleResponse(http.Response response) {
     switch (response.statusCode) {
-      case 200:
+      case 200 || 201:
         return jsonDecode(response.body);
       case 400:
         throw Exception('Bad Request: ${response.body}');
