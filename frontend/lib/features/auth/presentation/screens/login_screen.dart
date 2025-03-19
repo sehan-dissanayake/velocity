@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:frontend/core/utils/auth_state.dart';
 import 'package:frontend/features/auth/provider/auth_provider.dart';
 import 'package:frontend/features/auth/presentation/screens/sign_up_screen.dart';
+import 'package:frontend/features/home/presentation/screens/home_screen.dart'; // Import HomeScreen
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -68,22 +69,31 @@ class _LoginScreenState extends State<LoginScreen> {
               const SizedBox(height: 20),
               ElevatedButton(
                 onPressed:
-                    authProvider.state ==
-                            AuthState
-                                .loading // Changed here
+                    authProvider.state == AuthState.loading
                         ? null
-                        : () {
+                        : () async {
                           if (_formKey.currentState!.validate()) {
-                            authProvider.login(
+                            await authProvider.login(
                               _emailController.text.trim(),
                               _passwordController.text.trim(),
                             );
+                            if (authProvider.state == AuthState.authenticated) {
+                              // Use pushReplacement to navigate to HomeScreen
+                              Navigator.pushReplacement(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (context) => const HomeScreen(),
+                                ),
+                              );
+                            } else {
+                              print(
+                                'Login failed: ${authProvider.errorMessage}',
+                              );
+                            }
                           }
                         },
                 child:
-                    authProvider.state ==
-                            AuthState
-                                .loading // Changed here
+                    authProvider.state == AuthState.loading
                         ? const CircularProgressIndicator()
                         : const Text('Login'),
               ),
@@ -105,5 +115,12 @@ class _LoginScreenState extends State<LoginScreen> {
         ),
       ),
     );
+  }
+
+  @override
+  void dispose() {
+    _emailController.dispose();
+    _passwordController.dispose();
+    super.dispose();
   }
 }
