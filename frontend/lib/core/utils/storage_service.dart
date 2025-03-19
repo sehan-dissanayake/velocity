@@ -14,6 +14,11 @@ class StorageService {
   static Future<void> setToken(String token) =>
       _secureStorage.write(key: 'jwt_token', value: token);
   static Future<void> deleteToken() => _secureStorage.delete(key: 'jwt_token');
+  
+  // User ID methods
+  static Future<String?> getUserId() => _secureStorage.read(key: 'user_id');
+  static Future<void> setUserId(int userId) =>
+      _secureStorage.write(key: 'user_id', value: userId.toString());
 
   // General preferences
   static bool get isLoggedIn => _prefs?.getBool('is_logged_in') ?? false;
