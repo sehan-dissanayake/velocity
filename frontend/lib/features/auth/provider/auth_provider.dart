@@ -1,3 +1,4 @@
+import 'package:flutter/material.dart';
 import 'package:frontend/core/utils/api_service.dart';
 import 'package:flutter/foundation.dart';
 import 'package:frontend/core/utils/storage_service.dart';
@@ -43,7 +44,9 @@ class AuthProvider with ChangeNotifier {
 
       await StorageService.setToken(response['token']);
       await StorageService.setLoggedIn(true);
+      await StorageService.setUserId(response['user']['id']);
       _state = AuthState.authenticated;
+      
     } catch (e) {
       _state = AuthState.error;
       _errorMessage = e.toString().replaceAll('Exception: ', '');
