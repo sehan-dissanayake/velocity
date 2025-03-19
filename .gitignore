@@ -17,6 +17,5 @@ backend/ca.pem
 
 # Flutter desktop platform build directories
 frontend/windows/flutter/
-frontend/macos/Flutter/
 frontend/linux/flutter/
 frontend/ios/Flutter/
