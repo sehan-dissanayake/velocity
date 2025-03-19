@@ -14,3 +14,9 @@ backend/ca.pem
 # General
 .DS_Store
 .env
+
+# Flutter desktop platform build directories
+frontend/windows/flutter/
+frontend/macos/Flutter/
+frontend/linux/flutter/
+frontend/ios/Flutter/
