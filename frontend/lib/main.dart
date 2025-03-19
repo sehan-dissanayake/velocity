@@ -7,6 +7,7 @@ import 'package:frontend/features/auth/provider/auth_provider.dart';
 import 'package:frontend/features/auth/presentation/screens/login_screen.dart';
 import 'package:frontend/features/home/presentation/screens/home_screen.dart';
 import 'package:frontend/core/utils/storage_service.dart';
+import 'package:frontend/features/core/presentation/screens/main_navigation_screen.dart';
 
 Future<void> main() async {
   await dotenv.load(fileName: ".env");
@@ -57,7 +58,7 @@ class MyApp extends StatelessWidget {
             }
 
             if (authProvider.state == AuthState.authenticated) {
-              return const HomeScreen();
+              return const MainNavigationScreen();
             }
             return const LoginScreen();
           },

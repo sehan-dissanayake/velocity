@@ -43,3 +43,9 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# Flutter desktop platform build directories
+windows/flutter/
+macos/Flutter/
+linux/flutter/
+ios/Flutter/
