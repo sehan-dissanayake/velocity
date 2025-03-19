@@ -59,7 +59,7 @@ class MyApp extends StatelessWidget {
             if (authProvider.state == AuthState.authenticated) {
               return const HomeScreen();
             }
-            return const WelcomeScreen();
+            return const LoginScreen();
           },
         ),
         // Remove RouteGenerator reference until implementing it

@@ -1,23 +1,20 @@
 const User = require('../models/user');
-const jwt = require('jsonwebtoken');
+const { generateToken } = require('../middleware/authMiddleware');
 
+exports.login =async (req, res) => {
+    const { email, password } = req.body;
 
-// Login controller
-exports.login = async (req, res) => {
-    try {
-        const { email, password } = req.body;
-        
-        if (!email || !password) {
-            return res.status(400).json({ error: 'Email and password are required' });
+    // Validate input
+    if (!email || !password) {
+        return res.status(400).json({ error: 'Email and password are required' });
+    }
+
+    // Find user by email
+    User.findByEmail(email, async (err, user) => {
+        if (err) {
+            return res.status(500).json({ error: 'Database error' });
         }
-
-        const user = await new Promise((resolve, reject) => {
-            User.findByEmail(email, (err, user) => {
-                if (err) reject(err);
-                resolve(user);
-            });
-        });
-
+        
         if (!user) return res.status(401).json({ error: 'Invalid credentials' });
 
         const isMatch = await new Promise((resolve, reject) => {
@@ -29,19 +26,14 @@ exports.login = async (req, res) => {
 
         if (!isMatch) return res.status(401).json({ error: 'Invalid credentials' });
 
-        const token = jwt.sign(
-            { userId: user.id, email: user.email },
-            process.env.JWT_SECRET,
-            { expiresIn: '1h' }
-        );
+        // Generate JWT token
+        const token = generateToken(user);
 
-        res.status(200).json({
+        // Return token and user info
+        return res.status(200).json({
             message: 'Login successful',
             token,
             user: { id: user.id, email: user.email }
         });
-    } catch (err) {
-        console.error(err);
-        res.status(500).json({ error: 'Server error' });
-    }
+    });
 };
