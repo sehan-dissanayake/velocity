@@ -1,5 +1,5 @@
 const User = require('../models/user');
-const { generateToken } = require('../middleware/authMiddleware');
+const generateToken = require('../utils/token');  
 
 // Login controller
 exports.login = async (req, res) => {

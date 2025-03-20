@@ -1,17 +1,17 @@
 const jwt = require('jsonwebtoken');
 
-exports.generateToken = (userData) => {
-  return jwt.sign(
-    { id: userData.id, email: userData.email },
-    process.env.JWT_SECRET || 'velociti',
-    { expiresIn: '24h' }
-  );
-};
+module.exports = (req, res, next) => {
+    const token = req.header('Authorization')?.replace('Bearer ', '');
+    
+    if (!token) {
+        return res.status(401).json({ error: 'No token provided' });
+    }
 
-exports.verifyToken = (token) => {
-  try {
-    return jwt.verify(token, process.env.JWT_SECRET || 'velociti');
-  } catch (error) {
-    return null;
-  }
+    try {
+        const decoded = jwt.verify(token, process.env.JWT_SECRET);
+        req.user = decoded;
+        next();
+    } catch (err) {
+        res.status(401).json({ error: 'Invalid token' });
+    }
 };

@@ -42,4 +42,16 @@ User.comparePassword = (candidatePassword, hash, callback) => {
     });
 };
 
+// Find user by ID
+User.findById = (id, callback) => {
+    const query = 'SELECT * FROM users WHERE id = ?';
+    db.query(query, [id], (err, results) => {
+        if (err) {
+            return callback(err, null);
+        }
+        callback(null, results[0]); // Assuming 'id' is unique, so only one user is returned
+    });
+};
+
+
 module.exports = User;

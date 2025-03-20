@@ -8,6 +8,7 @@ import 'package:frontend/features/auth/presentation/screens/login_screen.dart';
 import 'package:frontend/features/home/presentation/screens/home_screen.dart';
 import 'package:frontend/core/utils/storage_service.dart';
 import 'package:frontend/features/core/presentation/screens/main_navigation_screen.dart';
+import 'package:frontend/features/wallet/domain/provider/wallet_provider.dart';
 
 Future<void> main() async {
   await dotenv.load(fileName: ".env");
@@ -29,6 +30,7 @@ class MyApp extends StatelessWidget {
             return authProvider;
           },
         ),
+        ChangeNotifierProvider(create: (_) => WalletProvider()),
       ],
       child: MaterialApp(
         title: 'My App',
