@@ -46,6 +46,5 @@ app.*.map.json
 
 # Flutter desktop platform build directories
 windows/flutter/
-macos/Flutter/
+
 linux/flutter/
-ios/Flutter/
