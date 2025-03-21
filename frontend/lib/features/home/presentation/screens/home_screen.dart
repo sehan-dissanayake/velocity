@@ -1,15 +1,8 @@
-import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:http/http.dart' as http;
-import 'package:flutter_dotenv/flutter_dotenv.dart';
-import 'package:frontend/core/utils/socket_service.dart';
 import 'package:frontend/features/auth/provider/auth_provider.dart';
 import 'package:frontend/features/auth/presentation/screens/login_screen.dart';
-import 'package:frontend/core/utils/storage_service.dart';
-import 'package:frontend/core/config/websocket_config.dart';
-import 'package:frontend/features/rfid/rfid_handler.dart';
-import 'package:frontend/features/notifications/notification_handler.dart';
+import 'package:frontend/features/notifications/background_notification_manager.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -19,221 +12,21 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  SocketService? _notificationService;
-  SocketService? _rfidService;
-  NotificationHandler? _notificationHandler;
-  RfidHandler? _rfidHandler;
-  
-  bool _notificationConnected = false;
-  bool _rfidConnected = false;
-  final List<String> _eventLogs = [];
-  final ScrollController _scrollController = ScrollController();
-
   @override
   void initState() {
     super.initState();
+    
+    // Start the background service if it's not running
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      _initializeSocketServices();
-    });
-  }
-
-  @override
-  void dispose() {
-    _disposeSocketServices();
-    _scrollController.dispose();
-    super.dispose();
-  }
-
-  void _initializeSocketServices() async {
-    final token = await StorageService.getToken();
-    if (token == null) {
-      _logEvent('❌ No authentication token available');
-      return;
-    }
-
-    final baseUrl = WebSocketConfig.socketUrl;
-    _logEvent('🔌 Socket.IO base URL: $baseUrl');
-
-    // Initialize notification socket
-    _notificationService = SocketService(
-      url: baseUrl,
-      namespace: WebSocketConfig.notificationsNamespace,
-      token: token,
-    );
-    _notificationService!.connect();
-    
-    // Set up notification connection status check
-    Future.delayed(const Duration(seconds: 2), () {
-      if (mounted) {
-        setState(() => _notificationConnected = _notificationService!.isConnected);
-        _logEvent(_notificationConnected 
-            ? '🔗 Connected to notification socket' 
-            : '❌ Failed to connect to notification socket');
-            
-        if (_notificationConnected) {
-          _notificationHandler = NotificationHandler(socketService: _notificationService!);
-          _setupNotificationListener();
-          _subscribeToNotificationChannels();
-        }
-      }
-    });
-
-    // Initialize RFID socket
-    _rfidService = SocketService(
-      url: baseUrl,
-      namespace: WebSocketConfig.rfidNamespace,
-      token: token,
-    );
-    _rfidService!.connect();
-    
-    // Set up RFID connection status check
-    Future.delayed(const Duration(seconds: 2), () {
-      if (mounted) {
-        setState(() => _rfidConnected = _rfidService!.isConnected);
-        _logEvent(_rfidConnected 
-            ? '🔗 Connected to RFID socket' 
-            : '❌ Failed to connect to RFID socket');
-            
-        if (_rfidConnected) {
-          _rfidHandler = RfidHandler(socketService: _rfidService!);
-          _setupRfidListener();
-        }
-      }
-    });
-  }
-
-  void _setupNotificationListener() {
-    _notificationHandler!.notificationStream.listen((notification) {
-      _logEvent('📢 New notification: ${jsonEncode(notification)}');
-    });
-  }
-
-  void _setupRfidListener() {
-    _rfidHandler!.rfidEventStream.listen((rfidEvent) {
-      _logEvent('🔖 RFID event: ${jsonEncode(rfidEvent)}');
-    });
-  }
-
-  void _subscribeToNotificationChannels() {
-    _notificationHandler!.subscribeToChannels(['user_notifications']);
-    _logEvent('📨 Sent subscription request to notification channels');
-  }
-
-  void _disposeSocketServices() {
-    _notificationHandler?.dispose();
-    _rfidHandler?.dispose();
-    _notificationService?.dispose();
-    _rfidService?.dispose();
-  }
-
-  void _logEvent(String event) {
-    if (mounted) {
-      setState(() {
-        _eventLogs.add('[${DateTime.now().toString().split('.')[0]}] $event');
-      });
-      
-      // Scroll to bottom of logs
-      Future.delayed(const Duration(milliseconds: 100), () {
-        if (_scrollController.hasClients) {
-          _scrollController.animateTo(
-            _scrollController.position.maxScrollExtent,
-            duration: const Duration(milliseconds: 300),
-            curve: Curves.easeOut,
-          );
-        }
-      });
-    }
-  }
-
-  Future<void> _sendPing() async {
-    final pingMessage = {
-      'type': 'ping',
-      'timestamp': DateTime.now().toIso8601String(),
-    };
-    
-    if (_notificationService?.isConnected == true) {
-      _notificationService!.sendMessage(pingMessage);
-      _logEvent('📤 Sent ping to notification service');
-    }
-    
-    if (_rfidService?.isConnected == true) {
-      _rfidService!.sendMessage(pingMessage);
-      _logEvent('📤 Sent ping to RFID service');
-    }
-  }
-
-  Future<void> _testNotification() async {
-    final token = await StorageService.getToken();
-    final baseApiUrl = dotenv.get('BASE_API_URL', fallback: 'http://localhost:3000/api');
-    
-    try {
-      // Get current user ID
-      final userId = await StorageService.getUserId(); 
-      
-      if (userId == null) {
-        _logEvent('❌ Error: No user ID available');
-        return;
-      }
-      
-      final response = await http.post(
-        Uri.parse('$baseApiUrl/notification'),
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer $token',
-        },
-        body: jsonEncode({
-          'user_id': userId,
-          'title': 'Test Notification',
-          'message': 'This is a test notification sent at ${DateTime.now()}',
-          'type': 'info',
-        }),
+      final notificationManager = Provider.of<BackgroundNotificationManager>(
+        context, 
+        listen: false
       );
       
-      if (response.statusCode == 200) {
-        _logEvent('🔔 Notification test request sent successfully');
-      } else {
-        _logEvent('❌ Error: ${response.statusCode} - ${response.body}');
+      if (!notificationManager.isRunning) {
+        notificationManager.startService();
       }
-    } catch (e) {
-      _logEvent('❌ Error sending test notification: $e');
-    }
-  }
-
-  Future<void> _testRfidEvent() async {
-    final token = await StorageService.getToken();
-    final baseApiUrl = dotenv.get('BASE_API_URL', fallback: 'http://localhost:3000/api');
-    
-    try {
-      // Get current user ID
-      final userId = await StorageService.getUserId();
-      
-      if (userId == null) {
-        _logEvent('❌ Error: No user ID available');
-        return;
-      }
-      
-      final response = await http.post(
-        Uri.parse('$baseApiUrl/rfid'),
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer $token',
-        },
-        body: jsonEncode({
-          'user_id': userId,
-          'station_id': 'station_123',
-          'station_name': 'Central Station',
-          'event_type': 'entry',
-        }),
-      );
-      
-      if (response.statusCode == 200) {
-        _logEvent('🚪 RFID event test request sent successfully');
-      } else {
-        _logEvent('❌ Error: ${response.statusCode} - ${response.body}');
-      }
-    } catch (e) {
-      _logEvent('❌ Error sending test RFID event: $e');
-    }
+    });
   }
 
   @override
@@ -242,13 +35,66 @@ class _HomeScreenState extends State<HomeScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Socket.IO Testing'),
+        title: const Text('Velociti Home'),
         actions: [
+          // Notifications icon with badge
+          Consumer<BackgroundNotificationManager>(
+            builder: (context, manager, _) {
+              final unreadCount = manager.notifications
+                  .where((n) => !(n['read'] ?? false))
+                  .length;
+                  
+              return Stack(
+                alignment: Alignment.center,
+                children: [
+                  IconButton(
+                    icon: const Icon(Icons.notifications),
+                    onPressed: () {
+                      Navigator.pushNamed(context, '/notifications');
+                    },
+                  ),
+                  if (unreadCount > 0)
+                    Positioned(
+                      top: 8,
+                      right: 8,
+                      child: Container(
+                        padding: const EdgeInsets.all(2),
+                        decoration: BoxDecoration(
+                          color: Colors.red,
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        constraints: const BoxConstraints(
+                          minWidth: 16,
+                          minHeight: 16,
+                        ),
+                        child: Text(
+                          unreadCount.toString(),
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 10,
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                      ),
+                    ),
+                ],
+              );
+            },
+          ),
+          
+          // Logout button
           IconButton(
             icon: const Icon(Icons.logout),
             onPressed: () async {
+              // Stop background service before logout
+              final notificationManager = Provider.of<BackgroundNotificationManager>(
+                context, 
+                listen: false
+              );
+              notificationManager.stopService();
+              
+              // Logout
               await authProvider.logout();
-              _disposeSocketServices();
               Navigator.pushReplacement(
                 context,
                 MaterialPageRoute(builder: (context) => const LoginScreen()),
@@ -257,101 +103,148 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         ],
       ),
-            body: Column(
+      body: Column(
         children: [
-          // Connection status indicators
-          Container(
-            color: Colors.grey[200],
-            padding: const EdgeInsets.all(8.0),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceAround,
-              children: [
-                _connectionStatusWidget(
-                  'Notifications',
-                  _notificationConnected,
+          // Connection status
+          Consumer<BackgroundNotificationManager>(
+            builder: (context, manager, _) {
+              return Container(
+                color: Colors.grey[200],
+                padding: const EdgeInsets.all(8.0),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceAround,
+                  children: [
+                    _statusIndicator(
+                      'Notifications', 
+                      manager.notificationsConnected,
+                    ),
+                    _statusIndicator(
+                      'RFID Events', 
+                      manager.rfidConnected,
+                    ),
+                  ],
                 ),
-                _connectionStatusWidget('RFID Events', _rfidConnected),
-              ],
-            ),
+              );
+            },
           ),
-
-          // Event log
+          
+          // Recent notifications
           Expanded(
-            child: ListView.builder(
-              controller: _scrollController,
-              padding: const EdgeInsets.all(8.0),
-              itemCount: _eventLogs.length,
-              itemBuilder: (context, index) {
-                return Padding(
-                  padding: const EdgeInsets.only(bottom: 4.0),
-                  child: Text(
-                    _eventLogs[index],
-                    style: const TextStyle(fontFamily: 'monospace'),
-                  ),
+            child: Consumer<BackgroundNotificationManager>(
+              builder: (context, manager, _) {
+                if (manager.notifications.isEmpty) {
+                  return const Center(
+                    child: Text('No notifications yet'),
+                  );
+                }
+                
+                return ListView.builder(
+                  itemCount: manager.notifications.length > 3 
+                      ? 3 
+                      : manager.notifications.length,
+                  itemBuilder: (context, index) {
+                    final notification = manager.notifications[index];
+                    final isRfid = notification['type'] == 'rfid';
+                    final isRead = notification['read'] ?? false;
+                    
+                    return Card(
+                      margin: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 4,
+                      ),
+                      color: isRead ? null : Colors.blue[50],
+                      child: ListTile(
+                        leading: Icon(
+                          isRfid ? Icons.nfc : Icons.notifications,
+                          color: isRfid ? Colors.orange : Colors.blue,
+                        ),
+                        title: Text(notification['title'] ?? 'Notification'),
+                        subtitle: Text(notification['message'] ?? ''),
+                        trailing: Text(
+                          _formatTime(notification['timestamp'] ?? ''),
+                          style: TextStyle(
+                            color: Colors.grey[600],
+                            fontSize: 12,
+                          ),
+                        ),
+                        onTap: () {
+                          manager.markAsRead(notification['id']);
+                          // Show details or navigate
+                        },
+                      ),
+                    );
+                  },
                 );
               },
             ),
           ),
           
-          // Action buttons
-          Padding(
-            padding: const EdgeInsets.all(8.0),
-            child: Wrap(
-              spacing: 8.0,
-              runSpacing: 8.0,
-              alignment: WrapAlignment.center,
-              children: [
-                ElevatedButton(
-                  onPressed: _sendPing,
-                  child: const Text('Send Ping'),
-                ),
-                ElevatedButton(
-                  onPressed: _testNotification,
-                  child: const Text('Test Notification'),
-                ),
-                ElevatedButton(
-                  onPressed: _testRfidEvent,
-                  child: const Text('Test RFID Event'),
-                ),
-              ],
-            ),
+          // View all button
+          OutlinedButton.icon(
+            onPressed: () {
+              Navigator.pushNamed(context, '/notifications');
+            },
+            icon: const Icon(Icons.list),
+            label: const Text('View All Notifications'),
           ),
-
-          // Connection buttons
-          Padding(
-            padding: const EdgeInsets.only(bottom: 16.0),
-            child: Wrap(
-              spacing: 8.0,
-              alignment: WrapAlignment.center,
-              children: [
-                ElevatedButton(
-                  onPressed:
-                      _notificationConnected ? null : _initializeSocketServices,
-                  child: const Text('Connect'),
+          
+          const SizedBox(height: 16),
+          
+          // // Background service control
+          // Consumer<BackgroundNotificationManager>(
+          //   builder: (context, manager, _) {
+          //     return Padding(
+          //       padding: const EdgeInsets.all(16.0),
+          //       child: Row(
+          //         children: [
+          //           const Text('Run in background:'),
+          //           const Spacer(),
+          //           Switch(
+          //             value: manager.runInBackground,
+          //             onChanged: (value) {
+          //               manager.runInBackground = value;
+          //             },
+          //           ),
+          //         ],
+          //       ),
+          //     );
+          //   },
+          // ),
+          
+          // Service control buttons
+          Consumer<BackgroundNotificationManager>(
+            builder: (context, manager, _) {
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 16.0),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                  children: [
+                    ElevatedButton(
+                      onPressed: manager.isRunning ? null : manager.startService,
+                      child: const Text('Start Service'),
+                    ),
+                    ElevatedButton(
+                      onPressed: manager.isRunning ? manager.stopService : null,
+                      child: const Text('Stop Service'),
+                    ),
+                  ],
                 ),
-                ElevatedButton(
-                  onPressed:
-                      !_notificationConnected && !_rfidConnected
-                          ? null
-                          : _disposeSocketServices,
-                  child: const Text('Disconnect'),
-                ),
-              ],
-            ),
+              );
+            },
           ),
         ],
       ),
     );
   }
-
-  Widget _connectionStatusWidget(String name, bool isConnected) {
+  
+  Widget _statusIndicator(String name, bool isActive) {
     return Row(
       children: [
         Container(
           width: 12,
           height: 12,
           decoration: BoxDecoration(
-            color: isConnected ? Colors.green : Colors.red,
+            color: isActive ? Colors.green : Colors.red,
             shape: BoxShape.circle,
           ),
         ),
@@ -359,5 +252,14 @@ class _HomeScreenState extends State<HomeScreen> {
         Text(name),
       ],
     );
+  }
+  
+  String _formatTime(String timestamp) {
+    try {
+      final date = DateTime.parse(timestamp);
+      return '${date.hour.toString().padLeft(2, '0')}:${date.minute.toString().padLeft(2, '0')}';
+    } catch (_) {
+      return '';
+    }
   }
 }
