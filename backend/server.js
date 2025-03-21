@@ -35,6 +35,11 @@ app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 
 // Routes
+app.get('/', (req, res) => {
+  res.send('Welcome to the API');
+}
+);
+
 app.use('/api/auth', authRoutes);
 app.use('/api/railway-stations', railwayRoutes);
 app.use('/api/wallet', walletRoutes);
