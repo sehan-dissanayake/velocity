@@ -4,6 +4,7 @@ const cors = require('cors');
 const http = require('http');
 const { Server } = require('socket.io');
 const authRoutes = require('./routes/authRoutes');
+const railwayRoutes = require('./routes/railwayRoutes');
 const WebSocketManager = require('./services/websocketManager');
 require('dotenv').config();
 
@@ -33,6 +34,7 @@ app.use(bodyParser.urlencoded({ extended: true }));
 
 // Routes
 app.use('/api/auth', authRoutes);
+app.use('/api/railway-stations', railwayRoutes);
 
 // In your API endpoint handlers (server.js)
 app.post('/api/notification', (req, res) => {
