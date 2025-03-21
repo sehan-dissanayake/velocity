@@ -46,7 +46,6 @@ class AuthProvider with ChangeNotifier {
       await StorageService.setLoggedIn(true);
       await StorageService.setUserId(response['user']['id']);
       _state = AuthState.authenticated;
-      
     } catch (e) {
       _state = AuthState.error;
       _errorMessage = e.toString().replaceAll('Exception: ', '');
