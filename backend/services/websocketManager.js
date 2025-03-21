@@ -1,5 +1,6 @@
 const { verifyToken } = require('../middleware/authMiddleware');
 const { v4: uuidv4 } = require('uuid');
+const mqtt = require('mqtt');
 
 class WebSocketManager {
   constructor(io) {
@@ -8,6 +9,20 @@ class WebSocketManager {
     console.log('WebSocketManager initialized');
     console.log('Setting up Socket.IO namespaces...');
     this.setupNamespaces();
+
+    // MQTT connection
+    this.mqttClient = mqtt.connect('mqtt://test.mosquitto.org');
+
+    this.mqttClient.on('connect', () => {
+        console.log('Connected to MQTT broker');
+        this.mqttClient.subscribe('rfid-Velociti/scans');
+      });
+
+    this.mqttClient.on('message', (topic, message) => {
+    if (topic === 'rfid-Velociti/scans') {
+        this.handleRfidScan(message.toString());
+    }
+    });
   }
 
   setupNamespaces() {
@@ -148,6 +163,34 @@ class WebSocketManager {
     }
     
     return delivered;
+  }
+
+  handleRfidScan(scanData) {
+    try {
+      const { uid, reader_id } = JSON.parse(scanData);
+      console.log(`RFID scan detected: UID ${uid}, Reader ID ${reader_id}`);
+      
+      // Replace with your logic to map reader_id to user(s)
+      const targetUserId = this.getUserFromReader(reader_id);
+      
+      if (targetUserId) {
+        this.createNotification(
+          targetUserId,
+          'RFID Scan Detected',
+          `Card UID: ${uid} scanned at reader ${reader_id}`,
+          'security',
+          { uid, reader_id }
+        );
+      }
+    } catch (error) {
+      console.error('Error processing RFID scan:', error);
+    }
+  }
+
+  getUserFromReader(readerId) {
+    // Implement your logic to map RFID reader IDs to users
+    // This could be a database lookup or in-memory mapping
+    return 1; // Return actual user ID
   }
 
   // Broadcast to all users in a group
