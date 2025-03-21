@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:frontend/features/auth/presentation/screens/welcome_screen.dart';
+import 'package:frontend/features/notifications/presentation/screens/notification_screens.dart';
 import 'package:provider/provider.dart';
 import 'package:frontend/core/utils/auth_state.dart';
 import 'package:frontend/features/auth/provider/auth_provider.dart';
@@ -8,11 +9,32 @@ import 'package:frontend/features/auth/presentation/screens/login_screen.dart';
 import 'package:frontend/features/home/presentation/screens/home_screen.dart';
 import 'package:frontend/core/utils/storage_service.dart';
 import 'package:frontend/features/core/presentation/screens/main_navigation_screen.dart';
+import 'package:frontend/core/services/notification_service.dart';
+import 'package:frontend/core/services/background_socket_handler.dart';
+import 'package:frontend/features/notifications/background_notification_manager.dart';
 
 Future<void> main() async {
-  await dotenv.load(fileName: ".env");
+  WidgetsFlutterBinding.ensureInitialized();
+
+  // Initialize services
+  await dotenv.load();
   await StorageService.init();
-  runApp(const MyApp());
+
+  // Initialize notification service
+  await NotificationService().init();
+
+  // Initialize background service
+  await BackgroundSocketHandler().init();
+
+  runApp(
+    MultiProvider(
+      providers: [
+        ChangeNotifierProvider(create: (_) => AuthProvider()),
+        ChangeNotifierProvider(create: (_) => BackgroundNotificationManager()),
+      ],
+      child: const MyApp(),
+    ),
+  );
 }
 
 class MyApp extends StatelessWidget {
@@ -31,7 +53,15 @@ class MyApp extends StatelessWidget {
         ),
       ],
       child: MaterialApp(
-        title: 'My App',
+        title: 'Velociti',
+        theme: ThemeData(
+          primarySwatch: Colors.blue,
+          visualDensity: VisualDensity.adaptivePlatformDensity,
+        ),
+        routes: {
+          '/notifications': (context) => const NotificationsScreen(),
+          // Add other routes here
+        },
         home: Consumer<AuthProvider>(
           builder: (context, authProvider, _) {
             if (authProvider.state == AuthState.error) {
@@ -60,7 +90,7 @@ class MyApp extends StatelessWidget {
             if (authProvider.state == AuthState.authenticated) {
               return const MainNavigationScreen();
             }
-            return const LoginScreen();
+            return const WelcomeScreen();
           },
         ),
         // Remove RouteGenerator reference until implementing it

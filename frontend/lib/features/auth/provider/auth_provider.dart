@@ -61,4 +61,36 @@ class AuthProvider with ChangeNotifier {
     _state = AuthState.unauthenticated;
     notifyListeners();
   }
+
+  Future<void> signUp({
+    required String firstName,
+    required String lastName,
+    required String email,
+    required String phone,
+    required String password,
+  }) async {
+    _state = AuthState.loading;
+    _errorMessage = '';
+    notifyListeners();
+
+    try {
+      final response = await ApiService.post('auth/signup', {
+        'firstName': firstName,
+        'lastName': lastName,
+        'email': email,
+        'phone': phone,
+        'password': password,
+      });
+
+      // Assuming the signup endpoint returns a token like login does
+      await StorageService.setToken(response['token']);
+      await StorageService.setLoggedIn(true);
+      _state = AuthState.authenticated;
+    } catch (e) {
+      _state = AuthState.error;
+      _errorMessage = e.toString().replaceAll('Exception: ', '');
+    } finally {
+      notifyListeners();
+    }
+  }
 }

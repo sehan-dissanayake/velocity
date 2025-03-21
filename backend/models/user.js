@@ -14,21 +14,32 @@ User.findByEmail = (email, callback) => {
     });
 };
 
+// Create a new user
 User.create = (userData, callback) => {
     bcrypt.hash(userData.password, 10, (err, hash) => {
         if (err) return callback(err);
         
-        const query = 'INSERT INTO users (email, password) VALUES (?, ?)';
-        db.query(query, [userData.email, hash], callback);
+        const query = `
+            INSERT INTO users (first_name, last_name, email, phone, password) 
+            VALUES (?, ?, ?, ?, ?)
+        `;
+        db.query(
+            query,
+            [userData.firstName, userData.lastName, userData.email, userData.phone, hash],
+            (err, result) => {
+                if (err) return callback(err);
+                callback(null, result); // result includes insertId
+            }
+        );
     });
 };
 
+// Compare password
 User.comparePassword = (candidatePassword, hash, callback) => {
     bcrypt.compare(candidatePassword, hash, (err, isMatch) => {
         if (err) return callback(err);
         callback(null, isMatch);
     });
 };
-
 
 module.exports = User;
