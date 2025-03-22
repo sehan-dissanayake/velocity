@@ -3,10 +3,12 @@ import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:http/http.dart' as http;
 import 'dart:math' show sin, cos, sqrt, atan2;
+import 'dart:io' show Platform;
 import '../../../../core/models/railway_station.dart';
 import '../../../../core/utils/api_service.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
-import 'package:geolocator/geolocator.dart'; // Add this import
+import 'package:geolocator/geolocator.dart';
+import 'dart:async'; // Add this for StreamSubscription
 
 class MapScreen extends StatefulWidget {
   const MapScreen({super.key});
@@ -31,13 +33,15 @@ class _MapScreenState extends State<MapScreen> {
   // User location-related variables
   Position? _currentPosition;
   bool _isLocationLoading = false;
+  StreamSubscription<Position>?
+  _positionStream; // Add this for continuous updates
 
   @override
   void initState() {
     super.initState();
     _loadCustomIcon();
     _fetchStations();
-    _getUserLocation(); // Call this to get the user's location on init
+    _getUserLocation(); // Get initial location and start continuous updates
   }
 
   Future<void> _loadCustomIcon() async {
@@ -238,7 +242,6 @@ class _MapScreenState extends State<MapScreen> {
   void _onMapCreated(GoogleMapController controller) {
     mapController = controller;
     print('Map created');
-    // If we have the user's location, move the camera there; otherwise, use the default position
     if (_currentPosition != null) {
       mapController?.animateCamera(
         CameraUpdate.newCameraPosition(
@@ -262,12 +265,12 @@ class _MapScreenState extends State<MapScreen> {
 
   @override
   void dispose() {
+    _positionStream?.cancel(); // Cancel the location stream
     mapController?.dispose();
     _searchController.dispose();
     super.dispose();
   }
 
-  // Search for places using Places API (New) Text Search
   Future<void> _searchPlaces(String query) async {
     if (query.isEmpty) {
       setState(() {
@@ -284,9 +287,16 @@ class _MapScreenState extends State<MapScreen> {
       'Content-Type': 'application/json',
       'X-Goog-Api-Key': apiKey,
       'X-Goog-FieldMask': 'places.displayName,places.location',
-      'X-Ios-Bundle-Identifier':
-          'com.example.frontend', // Replace with your app's bundle ID
     };
+
+    if (Platform.isIOS) {
+      headers['X-Ios-Bundle-Identifier'] = 'com.example.frontend';
+    } else if (Platform.isAndroid) {
+      // Uncomment if you add Android API key restrictions
+      // headers['X-Android-Package'] = 'com.example.frontend';
+      // headers['X-Android-Cert'] = 'YOUR_SHA1_FINGERPRINT';
+    }
+
     final Map<String, dynamic> body = {
       'textQuery': query,
       'locationBias': {
@@ -328,9 +338,8 @@ class _MapScreenState extends State<MapScreen> {
     }
   }
 
-  // Helper function to calculate the distance between two LatLng points (in kilometers)
   double _calculateDistance(LatLng point1, LatLng point2) {
-    const double earthRadius = 6371; // Radius of the Earth in kilometers
+    const double earthRadius = 6371;
     final double dLat = (point2.latitude - point1.latitude) * (3.14159 / 180);
     final double dLng = (point2.longitude - point1.longitude) * (3.14159 / 180);
     final double a =
@@ -343,29 +352,23 @@ class _MapScreenState extends State<MapScreen> {
     return earthRadius * c;
   }
 
-  // Handle place selection
   void _selectPlace(Map<String, dynamic> place) {
     final double lat = place['location']['latitude'];
     final double lng = place['location']['longitude'];
     final String displayName = place['displayName']['text'];
     print('Searched place: $displayName at ($lat, $lng)');
 
-    // Check if the searched place matches a railway station
     RailwayStation? matchedStation;
-    const double maxDistanceKm =
-        10.0; // Maximum distance in kilometers to consider a match
+    const double maxDistanceKm = 10.0;
     for (var station in stations) {
-      // Check if the station name or nameEn is a close match to the displayName
       bool nameMatch = false;
       final stationName = station.name.toLowerCase();
       final displayNameLower = displayName.toLowerCase();
       final stationNameEn = station.nameEn?.toLowerCase() ?? '';
 
-      // Split the displayName to get the main place name (e.g., "Kandy" from "Kandy, Sri Lanka")
       final displayNameParts = displayNameLower.split(',');
       final mainPlaceName = displayNameParts[0].trim();
 
-      // Check for a match (exact or close match)
       if (stationName == mainPlaceName ||
           (stationNameEn.isNotEmpty && stationNameEn == mainPlaceName) ||
           stationName.contains(mainPlaceName) ||
@@ -374,7 +377,6 @@ class _MapScreenState extends State<MapScreen> {
       }
 
       if (nameMatch) {
-        // Calculate the distance between the searched location and the station
         final distance = _calculateDistance(
           LatLng(lat, lng),
           LatLng(station.latitude, station.longitude),
@@ -383,7 +385,6 @@ class _MapScreenState extends State<MapScreen> {
           'Station ${station.name} at (${station.latitude}, ${station.longitude}) - Distance: $distance km',
         );
 
-        // Only consider the station a match if it's within the max distance
         if (distance <= maxDistanceKm) {
           print(
             'Matched station: ${station.name} at (${station.latitude}, ${station.longitude})',
@@ -438,14 +439,64 @@ class _MapScreenState extends State<MapScreen> {
     });
   }
 
-  // New method to get the user's current location
+  void _startLocationUpdates() {
+    _positionStream = Geolocator.getPositionStream(
+      locationSettings: const LocationSettings(
+        accuracy: LocationAccuracy.high,
+        distanceFilter: 10, // Update every 10 meters
+      ),
+    ).listen(
+      (Position position) {
+        print(
+          'Location updated: (${position.latitude}, ${position.longitude})',
+        );
+        setState(() {
+          _currentPosition = position;
+          _markers.removeWhere(
+            (marker) => marker.markerId.value == 'user_location',
+          );
+          _markers.add(
+            Marker(
+              markerId: const MarkerId('user_location'),
+              position: LatLng(position.latitude, position.longitude),
+              infoWindow: const InfoWindow(
+                title: 'Your Location',
+                snippet: 'You are here',
+              ),
+              icon: BitmapDescriptor.defaultMarkerWithHue(
+                BitmapDescriptor.hueGreen,
+              ),
+            ),
+          );
+
+          // Optionally move the camera to follow the user's location
+          if (mapController != null) {
+            mapController!.animateCamera(
+              CameraUpdate.newCameraPosition(
+                CameraPosition(
+                  target: LatLng(position.latitude, position.longitude),
+                  zoom: 15.0,
+                ),
+              ),
+            );
+          }
+        });
+      },
+      onError: (e) {
+        print('Error in location stream: $e');
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error in location updates: $e')),
+        );
+      },
+    );
+  }
+
   Future<void> _getUserLocation() async {
     setState(() {
       _isLocationLoading = true;
     });
 
     try {
-      // Check if location services are enabled
       bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
       if (!serviceEnabled) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -461,7 +512,6 @@ class _MapScreenState extends State<MapScreen> {
         return;
       }
 
-      // Check and request location permissions
       LocationPermission permission = await Geolocator.checkPermission();
       if (permission == LocationPermission.denied) {
         permission = await Geolocator.requestPermission();
@@ -478,9 +528,15 @@ class _MapScreenState extends State<MapScreen> {
 
       if (permission == LocationPermission.deniedForever) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text(
+          SnackBar(
+            content: const Text(
               'Location permissions are permanently denied. Please enable them in settings.',
+            ),
+            action: SnackBarAction(
+              label: 'Settings',
+              onPressed: () {
+                Geolocator.openAppSettings();
+              },
             ),
           ),
         );
@@ -490,7 +546,7 @@ class _MapScreenState extends State<MapScreen> {
         return;
       }
 
-      // Get the current position
+      // Get the initial position
       Position position = await Geolocator.getCurrentPosition(
         desiredAccuracy: LocationAccuracy.high,
       );
@@ -499,7 +555,6 @@ class _MapScreenState extends State<MapScreen> {
         _currentPosition = position;
         _isLocationLoading = false;
 
-        // Add a marker for the user's location
         _markers.add(
           Marker(
             markerId: const MarkerId('user_location'),
@@ -514,7 +569,6 @@ class _MapScreenState extends State<MapScreen> {
           ),
         );
 
-        // Move the camera to the user's location if the map is already created
         if (mapController != null) {
           mapController!.animateCamera(
             CameraUpdate.newCameraPosition(
@@ -526,6 +580,9 @@ class _MapScreenState extends State<MapScreen> {
           );
         }
       });
+
+      // Start continuous location updates after getting the initial position
+      _startLocationUpdates();
     } catch (e) {
       print('Error getting location: $e');
       ScaffoldMessenger.of(
@@ -574,11 +631,10 @@ class _MapScreenState extends State<MapScreen> {
                   zoom: 8.0,
                 ),
                 markers: _markers,
-                myLocationEnabled:
-                    true, // This shows the blue dot for the user's location
-                myLocationButtonEnabled:
-                    true, // This adds the default "My Location" button
+                myLocationEnabled: true,
+                myLocationButtonEnabled: true,
                 zoomControlsEnabled: true,
+                padding: const EdgeInsets.only(bottom: 120.0),
               ),
           Positioned(
             top: 10,
@@ -649,8 +705,7 @@ class _MapScreenState extends State<MapScreen> {
         mainAxisAlignment: MainAxisAlignment.end,
         children: [
           FloatingActionButton(
-            onPressed:
-                _getUserLocation, // Add a button to get the user's location
+            onPressed: _getUserLocation,
             child: const Icon(Icons.my_location),
             tooltip: 'Get My Location',
             heroTag: 'getLocation',
