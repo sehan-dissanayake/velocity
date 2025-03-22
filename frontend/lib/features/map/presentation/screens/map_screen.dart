@@ -209,8 +209,8 @@ class _MapScreenState extends State<MapScreen> {
           },
         },
       },
-      'travelMode': 'TRANSIT',
-      'routingPreference': 'LESS_WALKING',
+      'travelMode': 'DRIVE',
+      'routingPreference': 'TRAFFIC_AWARE',
       'computeAlternativeRoutes': false,
       'languageCode': 'en',
     };
@@ -222,6 +222,8 @@ class _MapScreenState extends State<MapScreen> {
           'Content-Type': 'application/json',
           'X-Goog-FieldMask':
               'routes.duration,routes.distanceMeters,routes.legs',
+          'X-Ios-Bundle-Identifier':
+              'com.example.frontend', // Add your iOS Bundle ID here
         },
         body: jsonEncode(body),
       );
@@ -235,9 +237,7 @@ class _MapScreenState extends State<MapScreen> {
             route['duration'].replaceAll('s', ''),
           );
 
-          // Convert distance to kilometers
           final distanceKm = (distanceMeters / 1000).toStringAsFixed(2);
-          // Convert duration to minutes
           final durationMinutes = (durationSeconds / 60).round();
 
           _showTravelDetails(
@@ -788,8 +788,8 @@ class _MapScreenState extends State<MapScreen> {
               },
             },
           },
-          'travelMode': 'TRANSIT',
-          'routingPreference': 'LESS_WALKING',
+          'travelMode': 'DRIVE',
+          'routingPreference': 'TRAFFIC_AWARE',
           'computeAlternativeRoutes': false,
           'languageCode': 'en',
         };
@@ -801,6 +801,8 @@ class _MapScreenState extends State<MapScreen> {
               'Content-Type': 'application/json',
               'X-Goog-FieldMask':
                   'routes.duration,routes.distanceMeters,routes.legs',
+              'X-Ios-Bundle-Identifier':
+                  'com.example.frontend', // Add your iOS Bundle ID here
             },
             body: jsonEncode(body),
           );
