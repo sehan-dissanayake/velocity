@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import 'package:frontend/core/utils/auth_state.dart';
 import 'package:frontend/features/auth/provider/auth_provider.dart';
 import 'package:frontend/features/home/presentation/screens/home_screen.dart';
+import 'package:frontend/features/core/presentation/screens/main_navigation_screen.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:intl/intl.dart';
 
@@ -468,7 +469,7 @@ class _SignUpScreenState extends State<SignUpScreen> with SingleTickerProviderSt
                                       Navigator.pushReplacement(
                                         context,
                                         MaterialPageRoute(
-                                          builder: (context) => const HomeScreen(),
+                                          builder: (context) => const MainNavigationScreen(),
                                         ),
                                       );
                                     }

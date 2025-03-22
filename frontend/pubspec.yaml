@@ -49,6 +49,8 @@ dependencies:
   flutter_background_service_ios: ^5.0.3
   rxdart: ^0.28.0
   flutter_animate: ^4.5.2
+  image_picker: ^1.1.2
+  cached_network_image: ^3.4.1
 
 
 dev_dependencies:
