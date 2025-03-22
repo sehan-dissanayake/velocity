@@ -74,123 +74,26 @@ class _MapScreenState extends State<MapScreen> {
     }
   }
 
-  void _updateMarkers() {
-    setState(() {
-      _markers.clear();
-      print('Updating markers for ${stations.length} stations');
-      for (var station in stations) {
-        String displayName;
-        switch (selectedLanguage) {
-          case 'Sinhala':
-            displayName =
-                station.nameSi?.isNotEmpty == true
-                    ? station.nameSi!
-                    : station.name;
-            break;
-          case 'Tamil':
-            displayName =
-                station.nameTa?.isNotEmpty == true
-                    ? station.nameTa!
-                    : station.name;
-            break;
-          default:
-            displayName =
-                station.nameEn?.isNotEmpty == true
-                    ? station.nameEn!
-                    : station.name;
-        }
-        print(
-          'Adding marker for $displayName at (${station.latitude}, ${station.longitude})',
-        );
-        _markers.add(
-          Marker(
-            markerId: MarkerId(station.id.toString()),
-            position: LatLng(station.latitude, station.longitude),
-            infoWindow: InfoWindow(
-              title: displayName,
-              snippet: station.city ?? 'Unknown city',
-            ),
-            onTap: () => _showStationDetails(station),
-            icon:
-                customIcon ??
-                BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueRed),
-          ),
-        );
-      }
-      print('Total markers added: ${_markers.length}');
-    });
-  }
-
   void _showStationDetails(RailwayStation station) {
-    String displayName;
-    switch (selectedLanguage) {
-      case 'Sinhala':
-        displayName =
-            station.nameSi?.isNotEmpty == true ? station.nameSi! : station.name;
-        break;
-      case 'Tamil':
-        displayName =
-            station.nameTa?.isNotEmpty == true ? station.nameTa! : station.name;
-        break;
-      default:
-        displayName =
-            station.nameEn?.isNotEmpty == true ? station.nameEn! : station.name;
-    }
-
     showDialog(
       context: context,
       builder:
           (context) => AlertDialog(
             title: Text(
-              displayName,
+              station.name,
               style: const TextStyle(
                 fontSize: 20,
                 fontWeight: FontWeight.bold,
                 color: Colors.blueAccent,
               ),
             ),
-            content: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  _buildDetailRow(
-                    'English Name',
-                    station.nameEn?.isNotEmpty == true
-                        ? station.nameEn!
-                        : station.name,
-                  ),
-                  _buildDetailRow(
-                    'Sinhala Name',
-                    station.nameSi?.isNotEmpty == true
-                        ? station.nameSi!
-                        : 'Not available',
-                  ),
-                  _buildDetailRow(
-                    'Tamil Name',
-                    station.nameTa?.isNotEmpty == true
-                        ? station.nameTa!
-                        : 'Not available',
-                  ),
-                  _buildDetailRow(
-                    'Address',
-                    station.address ?? 'Not available',
-                  ),
-                  _buildDetailRow('City', station.city ?? 'Not available'),
-                  _buildDetailRow(
-                    'Operator',
-                    station.operatorType ?? 'Not available',
-                  ),
-                  _buildDetailRow(
-                    'Services',
-                    station.services ?? 'Not available',
-                  ),
-                  _buildDetailRow(
-                    'Created At',
-                    station.createdAt?.toString() ?? 'Not available',
-                  ),
-                ],
-              ),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _buildDetailRow('Latitude', station.latitude.toString()),
+                _buildDetailRow('Longitude', station.longitude.toString()),
+              ],
             ),
             actions: [
               TextButton(
@@ -201,11 +104,194 @@ class _MapScreenState extends State<MapScreen> {
                 ),
               ),
             ],
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(15),
+          ),
+    );
+  }
+
+  void _updateMarkers() {
+    if (_currentPosition == null || stations.isEmpty) return;
+
+    setState(() {
+      _markers.clear();
+      final LatLng userLocation = LatLng(
+        _currentPosition!.latitude,
+        _currentPosition!.longitude,
+      );
+
+      List<RailwayStation> nearbyStations = [];
+
+      for (var station in stations) {
+        LatLng stationLocation = LatLng(station.latitude, station.longitude);
+        double distance = _calculateDistance(userLocation, stationLocation);
+
+        String displayName =
+            selectedLanguage == 'Sinhala'
+                ? station.nameSi ?? station.name
+                : selectedLanguage == 'Tamil'
+                ? station.nameTa ?? station.name
+                : station.nameEn ?? station.name;
+
+        BitmapDescriptor markerIcon =
+            distance <= 10
+                ? BitmapDescriptor.defaultMarkerWithHue(
+                  BitmapDescriptor.hueBlue,
+                )
+                : BitmapDescriptor.defaultMarkerWithHue(
+                  BitmapDescriptor.hueRed,
+                );
+
+        _markers.add(
+          Marker(
+            markerId: MarkerId(station.id.toString()),
+            position: stationLocation,
+            infoWindow: InfoWindow(
+              title: displayName,
+              snippet: 'Distance: ${distance.toStringAsFixed(2)} km',
+              onTap:
+                  () =>
+                      _fetchTravelTime(userLocation, stationLocation, station),
             ),
-            backgroundColor: Colors.white,
-            elevation: 8,
+            icon: markerIcon,
+          ),
+        );
+
+        if (distance <= 10) {
+          nearbyStations.add(station);
+        }
+      }
+
+      // Add user location marker
+      _markers.add(
+        Marker(
+          markerId: const MarkerId('user_location'),
+          position: userLocation,
+          infoWindow: const InfoWindow(
+            title: 'Your Location',
+            snippet: 'You are here',
+          ),
+          icon: BitmapDescriptor.defaultMarkerWithHue(
+            BitmapDescriptor.hueGreen,
+          ),
+        ),
+      );
+
+      // Fetch travel info for nearby stations if any exist
+      if (nearbyStations.isNotEmpty) {
+        _fetchTravelInfoForNearbyStations(nearbyStations);
+      }
+    });
+  }
+
+  Future<void> _fetchTravelTime(
+    LatLng origin,
+    LatLng destination,
+    RailwayStation station,
+  ) async {
+    final apiKey = dotenv.get('GOOGLE_MAPS_API_KEY');
+    final url = Uri.parse(
+      'https://routes.googleapis.com/directions/v2:computeRoutes?key=$apiKey',
+    );
+
+    final Map<String, dynamic> body = {
+      'origin': {
+        'location': {
+          'latLng': {
+            'latitude': origin.latitude,
+            'longitude': origin.longitude,
+          },
+        },
+      },
+      'destination': {
+        'location': {
+          'latLng': {
+            'latitude': destination.latitude,
+            'longitude': destination.longitude,
+          },
+        },
+      },
+      'travelMode': 'TRANSIT',
+      'routingPreference': 'LESS_WALKING',
+      'computeAlternativeRoutes': false,
+      'languageCode': 'en',
+    };
+
+    try {
+      final response = await http.post(
+        url,
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Goog-FieldMask':
+              'routes.duration,routes.distanceMeters,routes.legs',
+        },
+        body: jsonEncode(body),
+      );
+
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        if (data['routes'] != null && data['routes'].isNotEmpty) {
+          final route = data['routes'][0];
+          final distanceMeters = route['distanceMeters'];
+          final durationSeconds = int.parse(
+            route['duration'].replaceAll('s', ''),
+          );
+
+          // Convert distance to kilometers
+          final distanceKm = (distanceMeters / 1000).toStringAsFixed(2);
+          // Convert duration to minutes
+          final durationMinutes = (durationSeconds / 60).round();
+
+          _showTravelDetails(
+            station,
+            '$distanceKm km',
+            '$durationMinutes mins',
+          );
+        } else {
+          _showTravelDetails(station, 'N/A', 'No transit info');
+        }
+      } else {
+        print('Failed to fetch routes: ${response.body}');
+        _showTravelDetails(station, 'Error', 'Error');
+      }
+    } catch (e) {
+      print('Error fetching routes: $e');
+      _showTravelDetails(station, 'Error', 'Error');
+    }
+  }
+
+  void _showTravelDetails(
+    RailwayStation station,
+    String distance,
+    String duration,
+  ) {
+    showDialog(
+      context: context,
+      builder:
+          (context) => AlertDialog(
+            title: Text(
+              station.name,
+              style: const TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+                color: Colors.blueAccent,
+              ),
+            ),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _buildDetailRow('Distance', distance),
+                _buildDetailRow('Estimated Travel Time', duration),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text(
+                  'Close',
+                  style: TextStyle(color: Colors.blueAccent, fontSize: 16),
+                ),
+              ),
+            ],
           ),
     );
   }
@@ -379,6 +465,7 @@ class _MapScreenState extends State<MapScreen> {
           LatLng(lat, lng),
           LatLng(station.latitude, station.longitude),
         );
+        _showStationDetails(matchedStation!);
         print(
           'Station ${station.name} at (${station.latitude}, ${station.longitude}) - Distance: $distance km',
         );
@@ -445,7 +532,6 @@ class _MapScreenState extends State<MapScreen> {
     });
 
     try {
-      // Check if location services are enabled
       bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
       if (!serviceEnabled) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -461,7 +547,6 @@ class _MapScreenState extends State<MapScreen> {
         return;
       }
 
-      // Check and request location permissions
       LocationPermission permission = await Geolocator.checkPermission();
       if (permission == LocationPermission.denied) {
         permission = await Geolocator.requestPermission();
@@ -479,9 +564,7 @@ class _MapScreenState extends State<MapScreen> {
       if (permission == LocationPermission.deniedForever) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text(
-              'Location permissions are permanently denied. Please enable them in settings.',
-            ),
+            content: Text('Location permissions are permanently denied.'),
           ),
         );
         setState(() {
@@ -490,7 +573,6 @@ class _MapScreenState extends State<MapScreen> {
         return;
       }
 
-      // Get the current position
       Position position = await Geolocator.getCurrentPosition(
         desiredAccuracy: LocationAccuracy.high,
       );
@@ -498,21 +580,6 @@ class _MapScreenState extends State<MapScreen> {
       setState(() {
         _currentPosition = position;
         _isLocationLoading = false;
-
-        // Add a marker for the user's location
-        _markers.add(
-          Marker(
-            markerId: const MarkerId('user_location'),
-            position: LatLng(position.latitude, position.longitude),
-            infoWindow: const InfoWindow(
-              title: 'Your Location',
-              snippet: 'You are here',
-            ),
-            icon: BitmapDescriptor.defaultMarkerWithHue(
-              BitmapDescriptor.hueGreen,
-            ),
-          ),
-        );
 
         // Move the camera to the user's location if the map is already created
         if (mapController != null) {
@@ -525,6 +592,8 @@ class _MapScreenState extends State<MapScreen> {
             ),
           );
         }
+
+        _updateMarkers(); // Add this line
       });
     } catch (e) {
       print('Error getting location: $e');
@@ -679,6 +748,170 @@ class _MapScreenState extends State<MapScreen> {
           ),
         ],
       ),
+    );
+  }
+
+  Future<void> _fetchTravelInfoForNearbyStations(
+    List<RailwayStation> nearbyStations,
+  ) async {
+    if (nearbyStations.isEmpty || _currentPosition == null) return;
+
+    final apiKey = dotenv.get('GOOGLE_MAPS_API_KEY');
+    final origin = LatLng(
+      _currentPosition!.latitude,
+      _currentPosition!.longitude,
+    );
+    List<Map<String, dynamic>> travelInfoList = [];
+
+    // Process all stations concurrently
+    await Future.wait(
+      nearbyStations.map((station) async {
+        final destination = LatLng(station.latitude, station.longitude);
+        final url = Uri.parse(
+          'https://routes.googleapis.com/directions/v2:computeRoutes?key=$apiKey',
+        );
+
+        final Map<String, dynamic> body = {
+          'origin': {
+            'location': {
+              'latLng': {
+                'latitude': origin.latitude,
+                'longitude': origin.longitude,
+              },
+            },
+          },
+          'destination': {
+            'location': {
+              'latLng': {
+                'latitude': destination.latitude,
+                'longitude': destination.longitude,
+              },
+            },
+          },
+          'travelMode': 'TRANSIT',
+          'routingPreference': 'LESS_WALKING',
+          'computeAlternativeRoutes': false,
+          'languageCode': 'en',
+        };
+
+        try {
+          final response = await http.post(
+            url,
+            headers: {
+              'Content-Type': 'application/json',
+              'X-Goog-FieldMask':
+                  'routes.duration,routes.distanceMeters,routes.legs',
+            },
+            body: jsonEncode(body),
+          );
+
+          if (response.statusCode == 200) {
+            final data = json.decode(response.body);
+            if (data['routes'] != null && data['routes'].isNotEmpty) {
+              final route = data['routes'][0];
+              final distanceMeters = route['distanceMeters'];
+              final durationSeconds = int.parse(
+                route['duration'].replaceAll('s', ''),
+              );
+
+              final distanceKm = (distanceMeters / 1000).toStringAsFixed(2);
+              final durationMinutes = (durationSeconds / 60).round();
+
+              travelInfoList.add({
+                'station': station,
+                'distance': '$distanceKm km',
+                'duration': '$durationMinutes mins',
+              });
+            } else {
+              travelInfoList.add({
+                'station': station,
+                'distance': 'N/A',
+                'duration': 'No transit info',
+              });
+            }
+          } else {
+            print(
+              'Failed to fetch routes for ${station.name}: ${response.body}',
+            );
+            travelInfoList.add({
+              'station': station,
+              'distance': 'Error',
+              'duration': 'Error',
+            });
+          }
+        } catch (e) {
+          print('Error fetching routes for ${station.name}: $e');
+          travelInfoList.add({
+            'station': station,
+            'distance': 'Error',
+            'duration': 'Error',
+          });
+        }
+      }),
+    );
+
+    // Sort by distance (if desired)
+    travelInfoList.sort((a, b) {
+      final aDist =
+          double.tryParse(a['distance'].replaceAll(' km', '')) ??
+          double.infinity;
+      final bDist =
+          double.tryParse(b['distance'].replaceAll(' km', '')) ??
+          double.infinity;
+      return aDist.compareTo(bDist);
+    });
+
+    _showNearbyStationsSheet(travelInfoList);
+  }
+
+  void _showNearbyStationsSheet(List<Map<String, dynamic>> travelInfoList) {
+    showModalBottomSheet(
+      context: context,
+      builder: (context) {
+        return Container(
+          padding: const EdgeInsets.all(16.0),
+          height: 300, // Adjust height as needed
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Nearby Railway Stations (within 10km)',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 10),
+              Expanded(
+                child: ListView.builder(
+                  itemCount: travelInfoList.length,
+                  itemBuilder: (context, index) {
+                    final info = travelInfoList[index];
+                    final station = info['station'] as RailwayStation;
+                    final distance = info['distance'] as String;
+                    final duration = info['duration'] as String;
+                    return ListTile(
+                      title: Text(station.name),
+                      subtitle: Text('Distance: $distance, Time: $duration'),
+                      onTap: () {
+                        mapController?.animateCamera(
+                          CameraUpdate.newCameraPosition(
+                            CameraPosition(
+                              target: LatLng(
+                                station.latitude,
+                                station.longitude,
+                              ),
+                              zoom: 15.0,
+                            ),
+                          ),
+                        );
+                        Navigator.pop(context); // Close the bottom sheet
+                      },
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
 }
