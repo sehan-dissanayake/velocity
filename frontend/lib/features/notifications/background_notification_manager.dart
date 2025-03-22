@@ -43,7 +43,7 @@ class BackgroundNotificationManager extends ChangeNotifier {
       final notification = {
         'id': DateTime.now().millisecondsSinceEpoch.toString(),
         'title': 'RFID Event',
-        'message': 'Card scanned at ${rfidEvent['station_name'] ?? 'unknown location'}',
+        'message': '${rfidEvent['message']}',
         'type': 'rfid',
         'timestamp': DateTime.now().toIso8601String(),
         'data': rfidEvent,
