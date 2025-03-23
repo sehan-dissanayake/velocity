@@ -157,7 +157,7 @@ class BackgroundSocketHandler {
         NotificationService().showNotification(
           id: DateTime.now().millisecondsSinceEpoch.remainder(100000),
           title: 'RFID Event',
-          body: 'Card scanned at ${rfidData['station_name'] ?? 'unknown location'}',
+          body: '${rfidData['message']}',
           payload: rfidData,
         );
         break;

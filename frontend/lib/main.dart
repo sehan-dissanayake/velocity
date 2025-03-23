@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:frontend/features/auth/presentation/screens/welcome_screen.dart';
 import 'package:frontend/features/notifications/presentation/screens/notification_screens.dart';
+import 'package:frontend/features/wallet/providers/wallet_provider.dart';
 import 'package:provider/provider.dart';
 import 'package:frontend/core/utils/auth_state.dart';
 import 'package:frontend/features/auth/provider/auth_provider.dart';
@@ -12,6 +13,7 @@ import 'package:frontend/features/core/presentation/screens/main_navigation_scre
 import 'package:frontend/core/services/notification_service.dart';
 import 'package:frontend/core/services/background_socket_handler.dart';
 import 'package:frontend/features/notifications/background_notification_manager.dart';
+import 'package:frontend/features/profile/providers/profile_provider.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -31,6 +33,9 @@ Future<void> main() async {
       providers: [
         ChangeNotifierProvider(create: (_) => AuthProvider()),
         ChangeNotifierProvider(create: (_) => BackgroundNotificationManager()),
+        ChangeNotifierProvider(create: (context) => AuthProvider()),
+        ChangeNotifierProvider(create: (context) => ProfileProvider()),
+        ChangeNotifierProvider(create: (context) => WalletProvider())
       ],
       child: const MyApp(),
     ),
