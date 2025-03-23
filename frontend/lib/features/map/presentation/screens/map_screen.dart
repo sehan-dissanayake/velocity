@@ -107,8 +107,14 @@ class _MapScreenState extends State<MapScreen> {
     );
   }
 
-  void _updateMarkers() {
+  void _updateMarkers() async {
     if (_currentPosition == null || stations.isEmpty) return;
+
+    // Define custom marker icons with different sizes
+    final BitmapDescriptor largeRedMarker =
+        await BitmapDescriptor.defaultMarker;
+    final BitmapDescriptor smallBlueMarker =
+        await BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueBlue);
 
     setState(() {
       _markers.clear();
@@ -131,14 +137,9 @@ class _MapScreenState extends State<MapScreen> {
                 ? station.nameTa ?? station.name
                 : station.nameEn ?? station.name;
 
+        // Set marker icon based on distance
         BitmapDescriptor markerIcon =
-            distance <= 10
-                ? BitmapDescriptor.defaultMarkerWithHue(
-                  BitmapDescriptor.hueBlue,
-                )
-                : BitmapDescriptor.defaultMarkerWithHue(
-                  BitmapDescriptor.hueRed,
-                );
+            distance <= 10 ? largeRedMarker : smallBlueMarker;
 
         _markers.add(
           Marker(
@@ -150,11 +151,7 @@ class _MapScreenState extends State<MapScreen> {
             ),
             icon: markerIcon,
             onTap:
-                () => _fetchTravelTime(
-                  userLocation,
-                  stationLocation,
-                  station,
-                ), // Moved action here
+                () => _fetchTravelTime(userLocation, stationLocation, station),
           ),
         );
 
@@ -224,8 +221,7 @@ class _MapScreenState extends State<MapScreen> {
           'Content-Type': 'application/json',
           'X-Goog-FieldMask':
               'routes.duration,routes.distanceMeters,routes.polyline.encodedPolyline,routes.legs',
-          'X-Ios-Bundle-Identifier':
-              'com.example.frontend', // Replace with your iOS Bundle ID
+          'X-Ios-Bundle-Identifier': 'com.example.frontend',
         },
         body: jsonEncode(body),
       );
