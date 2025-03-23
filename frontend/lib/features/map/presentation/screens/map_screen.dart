@@ -6,7 +6,7 @@ import 'dart:math' show sin, cos, sqrt, atan2;
 import '../../../../core/models/railway_station.dart';
 import '../../../../core/utils/api_service.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
-import 'package:geolocator/geolocator.dart'; // Add this import
+import 'package:geolocator/geolocator.dart';
 
 class MapScreen extends StatefulWidget {
   const MapScreen({super.key});
@@ -20,15 +20,14 @@ class _MapScreenState extends State<MapScreen> {
   bool isLoading = true;
   GoogleMapController? mapController;
   final Set<Marker> _markers = {};
+  final Set<Polyline> _polylines = {};
   BitmapDescriptor? customIcon;
-  String selectedLanguage = 'English'; // Default language
+  String selectedLanguage = 'English';
 
-  // Search-related variables
   final TextEditingController _searchController = TextEditingController();
   List<Map<String, dynamic>> _predictions = [];
   bool _isSearching = false;
 
-  // User location-related variables
   Position? _currentPosition;
   bool _isLocationLoading = false;
 
@@ -37,7 +36,7 @@ class _MapScreenState extends State<MapScreen> {
     super.initState();
     _loadCustomIcon();
     _fetchStations();
-    _getUserLocation(); // Call this to get the user's location on init
+    _getUserLocation();
   }
 
   Future<void> _loadCustomIcon() async {
@@ -74,123 +73,26 @@ class _MapScreenState extends State<MapScreen> {
     }
   }
 
-  void _updateMarkers() {
-    setState(() {
-      _markers.clear();
-      print('Updating markers for ${stations.length} stations');
-      for (var station in stations) {
-        String displayName;
-        switch (selectedLanguage) {
-          case 'Sinhala':
-            displayName =
-                station.nameSi?.isNotEmpty == true
-                    ? station.nameSi!
-                    : station.name;
-            break;
-          case 'Tamil':
-            displayName =
-                station.nameTa?.isNotEmpty == true
-                    ? station.nameTa!
-                    : station.name;
-            break;
-          default:
-            displayName =
-                station.nameEn?.isNotEmpty == true
-                    ? station.nameEn!
-                    : station.name;
-        }
-        print(
-          'Adding marker for $displayName at (${station.latitude}, ${station.longitude})',
-        );
-        _markers.add(
-          Marker(
-            markerId: MarkerId(station.id.toString()),
-            position: LatLng(station.latitude, station.longitude),
-            infoWindow: InfoWindow(
-              title: displayName,
-              snippet: station.city ?? 'Unknown city',
-            ),
-            onTap: () => _showStationDetails(station),
-            icon:
-                customIcon ??
-                BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueRed),
-          ),
-        );
-      }
-      print('Total markers added: ${_markers.length}');
-    });
-  }
-
   void _showStationDetails(RailwayStation station) {
-    String displayName;
-    switch (selectedLanguage) {
-      case 'Sinhala':
-        displayName =
-            station.nameSi?.isNotEmpty == true ? station.nameSi! : station.name;
-        break;
-      case 'Tamil':
-        displayName =
-            station.nameTa?.isNotEmpty == true ? station.nameTa! : station.name;
-        break;
-      default:
-        displayName =
-            station.nameEn?.isNotEmpty == true ? station.nameEn! : station.name;
-    }
-
     showDialog(
       context: context,
       builder:
           (context) => AlertDialog(
             title: Text(
-              displayName,
+              station.name,
               style: const TextStyle(
                 fontSize: 20,
                 fontWeight: FontWeight.bold,
                 color: Colors.blueAccent,
               ),
             ),
-            content: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  _buildDetailRow(
-                    'English Name',
-                    station.nameEn?.isNotEmpty == true
-                        ? station.nameEn!
-                        : station.name,
-                  ),
-                  _buildDetailRow(
-                    'Sinhala Name',
-                    station.nameSi?.isNotEmpty == true
-                        ? station.nameSi!
-                        : 'Not available',
-                  ),
-                  _buildDetailRow(
-                    'Tamil Name',
-                    station.nameTa?.isNotEmpty == true
-                        ? station.nameTa!
-                        : 'Not available',
-                  ),
-                  _buildDetailRow(
-                    'Address',
-                    station.address ?? 'Not available',
-                  ),
-                  _buildDetailRow('City', station.city ?? 'Not available'),
-                  _buildDetailRow(
-                    'Operator',
-                    station.operatorType ?? 'Not available',
-                  ),
-                  _buildDetailRow(
-                    'Services',
-                    station.services ?? 'Not available',
-                  ),
-                  _buildDetailRow(
-                    'Created At',
-                    station.createdAt?.toString() ?? 'Not available',
-                  ),
-                ],
-              ),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _buildDetailRow('Latitude', station.latitude.toString()),
+                _buildDetailRow('Longitude', station.longitude.toString()),
+              ],
             ),
             actions: [
               TextButton(
@@ -201,11 +103,288 @@ class _MapScreenState extends State<MapScreen> {
                 ),
               ),
             ],
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(15),
+          ),
+    );
+  }
+
+  void _updateMarkers() async {
+    if (_currentPosition == null || stations.isEmpty) return;
+
+    // Define custom marker icons with different sizes
+    final BitmapDescriptor largeRedMarker =
+        await BitmapDescriptor.defaultMarker;
+    final BitmapDescriptor smallBlueMarker =
+        await BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueBlue);
+
+    setState(() {
+      _markers.clear();
+      _polylines.clear();
+      final LatLng userLocation = LatLng(
+        _currentPosition!.latitude,
+        _currentPosition!.longitude,
+      );
+
+      List<RailwayStation> nearbyStations = [];
+
+      for (var station in stations) {
+        LatLng stationLocation = LatLng(station.latitude, station.longitude);
+        double distance = _calculateDistance(userLocation, stationLocation);
+
+        String displayName =
+            selectedLanguage == 'Sinhala'
+                ? station.nameSi ?? station.name
+                : selectedLanguage == 'Tamil'
+                ? station.nameTa ?? station.name
+                : station.nameEn ?? station.name;
+
+        // Set marker icon based on distance
+        BitmapDescriptor markerIcon =
+            distance <= 10 ? largeRedMarker : smallBlueMarker;
+
+        _markers.add(
+          Marker(
+            markerId: MarkerId(station.id.toString()),
+            position: stationLocation,
+            infoWindow: InfoWindow(
+              title: displayName,
+              snippet: 'Distance: ${distance.toStringAsFixed(2)} km',
             ),
-            backgroundColor: Colors.white,
-            elevation: 8,
+            icon: markerIcon,
+            onTap:
+                () => _fetchTravelTime(userLocation, stationLocation, station),
+          ),
+        );
+
+        if (distance <= 10) {
+          nearbyStations.add(station);
+        }
+      }
+
+      _markers.add(
+        Marker(
+          markerId: const MarkerId('user_location'),
+          position: userLocation,
+          infoWindow: const InfoWindow(
+            title: 'Your Location',
+            snippet: 'You are here',
+          ),
+          icon: BitmapDescriptor.defaultMarkerWithHue(
+            BitmapDescriptor.hueGreen,
+          ),
+        ),
+      );
+
+      if (nearbyStations.isNotEmpty) {
+        _fetchTravelInfoForNearbyStations(nearbyStations);
+      }
+    });
+  }
+
+  Future<void> _fetchTravelTime(
+    LatLng origin,
+    LatLng destination,
+    RailwayStation station,
+  ) async {
+    print('Fetching travel time for ${station.name}');
+    final apiKey = dotenv.get('GOOGLE_MAPS_API_KEY');
+    final url = Uri.parse(
+      'https://routes.googleapis.com/directions/v2:computeRoutes?key=$apiKey',
+    );
+
+    final Map<String, dynamic> body = {
+      'origin': {
+        'location': {
+          'latLng': {
+            'latitude': origin.latitude,
+            'longitude': origin.longitude,
+          },
+        },
+      },
+      'destination': {
+        'location': {
+          'latLng': {
+            'latitude': destination.latitude,
+            'longitude': destination.longitude,
+          },
+        },
+      },
+      'travelMode': 'DRIVE',
+      'routingPreference': 'TRAFFIC_AWARE',
+      'computeAlternativeRoutes': false,
+      'languageCode': 'en',
+    };
+
+    try {
+      final response = await http.post(
+        url,
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Goog-FieldMask':
+              'routes.duration,routes.distanceMeters,routes.polyline.encodedPolyline,routes.legs',
+          'X-Ios-Bundle-Identifier': 'com.example.frontend',
+        },
+        body: jsonEncode(body),
+      );
+
+      print('API Response Status: ${response.statusCode}');
+      print('API Response Body: ${response.body}');
+
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        if (data['routes'] != null && data['routes'].isNotEmpty) {
+          final route = data['routes'][0];
+          final distanceMeters = route['distanceMeters'];
+          final durationSeconds = int.parse(
+            route['duration'].replaceAll('s', ''),
+          );
+          final encodedPolyline = route['polyline']?['encodedPolyline'];
+
+          final distanceKm = (distanceMeters / 1000).toStringAsFixed(2);
+          final durationMinutes = (durationSeconds / 60).round();
+
+          print('Distance: $distanceKm km, Duration: $durationMinutes mins');
+          print('Encoded Polyline: $encodedPolyline');
+
+          if (_calculateDistance(origin, destination) <= 10 &&
+              encodedPolyline != null) {
+            List<LatLng> polylinePoints = _decodePolyline(encodedPolyline);
+            print('Decoded Polyline Points: $polylinePoints');
+
+            if (polylinePoints.isNotEmpty) {
+              setState(() {
+                _polylines.clear();
+                _polylines.add(
+                  Polyline(
+                    polylineId: const PolylineId('route_to_station'),
+                    points: polylinePoints,
+                    color: Colors.blue,
+                    width: 5,
+                  ),
+                );
+              });
+              _fitMapToRoute(polylinePoints);
+            } else {
+              print('No valid polyline points decoded');
+            }
+          } else {
+            print(
+              'Station not within 10km or no polyline data: Distance = ${_calculateDistance(origin, destination)} km',
+            );
+          }
+
+          _showTravelDetails(
+            station,
+            '$distanceKm km',
+            '$durationMinutes mins',
+          );
+        } else {
+          print('No routes found in response');
+          _showTravelDetails(station, 'N/A', 'No transit info');
+        }
+      } else {
+        print('Failed to fetch routes: ${response.body}');
+        _showTravelDetails(station, 'Error', 'Error');
+      }
+    } catch (e) {
+      print('Error fetching routes: $e');
+      _showTravelDetails(station, 'Error', 'Error');
+    }
+  }
+
+  List<LatLng> _decodePolyline(String encoded) {
+    List<LatLng> points = [];
+    int index = 0, len = encoded.length;
+    int lat = 0, lng = 0;
+
+    while (index < len) {
+      int b, shift = 0, result = 0;
+      do {
+        b = encoded.codeUnitAt(index++) - 63;
+        result |= (b & 0x1f) << shift;
+        shift += 5;
+      } while (b >= 0x20);
+      int dlat = ((result & 1) != 0 ? ~(result >> 1) : (result >> 1));
+      lat += dlat;
+
+      shift = 0;
+      result = 0;
+      do {
+        b = encoded.codeUnitAt(index++) - 63;
+        result |= (b & 0x1f) << shift;
+        shift += 5;
+      } while (b >= 0x20);
+      int dlng = ((result & 1) != 0 ? ~(result >> 1) : (result >> 1));
+      lng += dlng;
+
+      points.add(LatLng(lat / 1E5, lng / 1E5));
+    }
+    return points;
+  }
+
+  void _fitMapToRoute(List<LatLng> points) {
+    if (points.isEmpty || mapController == null) {
+      print('No points or map controller not ready');
+      return;
+    }
+
+    double minLat = points[0].latitude;
+    double maxLat = points[0].latitude;
+    double minLng = points[0].longitude;
+    double maxLng = points[0].longitude;
+
+    for (var point in points) {
+      if (point.latitude < minLat) minLat = point.latitude;
+      if (point.latitude > maxLat) maxLat = point.latitude;
+      if (point.longitude < minLng) minLng = point.longitude;
+      if (point.longitude > maxLng) maxLng = point.longitude;
+    }
+
+    print('Fitting map to bounds: ($minLat, $minLng) to ($maxLat, $maxLng)');
+    mapController!.animateCamera(
+      CameraUpdate.newLatLngBounds(
+        LatLngBounds(
+          southwest: LatLng(minLat, minLng),
+          northeast: LatLng(maxLat, maxLng),
+        ),
+        50,
+      ),
+    );
+  }
+
+  void _showTravelDetails(
+    RailwayStation station,
+    String distance,
+    String duration,
+  ) {
+    showDialog(
+      context: context,
+      builder:
+          (context) => AlertDialog(
+            title: Text(
+              station.name,
+              style: const TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+                color: Colors.blueAccent,
+              ),
+            ),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _buildDetailRow('Distance', distance),
+                _buildDetailRow('Estimated Travel Time', duration),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text(
+                  'Close',
+                  style: TextStyle(color: Colors.blueAccent, fontSize: 16),
+                ),
+              ),
+            ],
           ),
     );
   }
@@ -238,7 +417,6 @@ class _MapScreenState extends State<MapScreen> {
   void _onMapCreated(GoogleMapController controller) {
     mapController = controller;
     print('Map created');
-    // If we have the user's location, move the camera there; otherwise, use the default position
     if (_currentPosition != null) {
       mapController?.animateCamera(
         CameraUpdate.newCameraPosition(
@@ -267,7 +445,6 @@ class _MapScreenState extends State<MapScreen> {
     super.dispose();
   }
 
-  // Search for places using Places API (New) Text Search
   Future<void> _searchPlaces(String query) async {
     if (query.isEmpty) {
       setState(() {
@@ -284,8 +461,7 @@ class _MapScreenState extends State<MapScreen> {
       'Content-Type': 'application/json',
       'X-Goog-Api-Key': apiKey,
       'X-Goog-FieldMask': 'places.displayName,places.location',
-      'X-Ios-Bundle-Identifier':
-          'com.example.frontend', // Replace with your app's bundle ID
+      'X-Ios-Bundle-Identifier': 'com.example.frontend',
     };
     final Map<String, dynamic> body = {
       'textQuery': query,
@@ -303,7 +479,6 @@ class _MapScreenState extends State<MapScreen> {
         headers: headers,
         body: jsonEncode(body),
       );
-
       if (response.statusCode == 200) {
         final jsonResponse = jsonDecode(response.body);
         setState(() {
@@ -328,9 +503,8 @@ class _MapScreenState extends State<MapScreen> {
     }
   }
 
-  // Helper function to calculate the distance between two LatLng points (in kilometers)
   double _calculateDistance(LatLng point1, LatLng point2) {
-    const double earthRadius = 6371; // Radius of the Earth in kilometers
+    const double earthRadius = 6371;
     final double dLat = (point2.latitude - point1.latitude) * (3.14159 / 180);
     final double dLng = (point2.longitude - point1.longitude) * (3.14159 / 180);
     final double a =
@@ -343,29 +517,21 @@ class _MapScreenState extends State<MapScreen> {
     return earthRadius * c;
   }
 
-  // Handle place selection
   void _selectPlace(Map<String, dynamic> place) {
     final double lat = place['location']['latitude'];
     final double lng = place['location']['longitude'];
     final String displayName = place['displayName']['text'];
     print('Searched place: $displayName at ($lat, $lng)');
 
-    // Check if the searched place matches a railway station
     RailwayStation? matchedStation;
-    const double maxDistanceKm =
-        10.0; // Maximum distance in kilometers to consider a match
+    const double maxDistanceKm = 10.0;
     for (var station in stations) {
-      // Check if the station name or nameEn is a close match to the displayName
       bool nameMatch = false;
       final stationName = station.name.toLowerCase();
       final displayNameLower = displayName.toLowerCase();
       final stationNameEn = station.nameEn?.toLowerCase() ?? '';
+      final mainPlaceName = displayNameLower.split(',')[0].trim();
 
-      // Split the displayName to get the main place name (e.g., "Kandy" from "Kandy, Sri Lanka")
-      final displayNameParts = displayNameLower.split(',');
-      final mainPlaceName = displayNameParts[0].trim();
-
-      // Check for a match (exact or close match)
       if (stationName == mainPlaceName ||
           (stationNameEn.isNotEmpty && stationNameEn == mainPlaceName) ||
           stationName.contains(mainPlaceName) ||
@@ -374,7 +540,6 @@ class _MapScreenState extends State<MapScreen> {
       }
 
       if (nameMatch) {
-        // Calculate the distance between the searched location and the station
         final distance = _calculateDistance(
           LatLng(lat, lng),
           LatLng(station.latitude, station.longitude),
@@ -382,8 +547,6 @@ class _MapScreenState extends State<MapScreen> {
         print(
           'Station ${station.name} at (${station.latitude}, ${station.longitude}) - Distance: $distance km',
         );
-
-        // Only consider the station a match if it's within the max distance
         if (distance <= maxDistanceKm) {
           print(
             'Matched station: ${station.name} at (${station.latitude}, ${station.longitude})',
@@ -438,30 +601,19 @@ class _MapScreenState extends State<MapScreen> {
     });
   }
 
-  // New method to get the user's current location
   Future<void> _getUserLocation() async {
-    setState(() {
-      _isLocationLoading = true;
-    });
+    setState(() => _isLocationLoading = true);
 
     try {
-      // Check if location services are enabled
       bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
       if (!serviceEnabled) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text(
-              'Location services are disabled. Please enable them.',
-            ),
-          ),
+          const SnackBar(content: Text('Location services are disabled.')),
         );
-        setState(() {
-          _isLocationLoading = false;
-        });
+        setState(() => _isLocationLoading = false);
         return;
       }
 
-      // Check and request location permissions
       LocationPermission permission = await Geolocator.checkPermission();
       if (permission == LocationPermission.denied) {
         permission = await Geolocator.requestPermission();
@@ -469,9 +621,7 @@ class _MapScreenState extends State<MapScreen> {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text('Location permissions are denied.')),
           );
-          setState(() {
-            _isLocationLoading = false;
-          });
+          setState(() => _isLocationLoading = false);
           return;
         }
       }
@@ -479,42 +629,19 @@ class _MapScreenState extends State<MapScreen> {
       if (permission == LocationPermission.deniedForever) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text(
-              'Location permissions are permanently denied. Please enable them in settings.',
-            ),
+            content: Text('Location permissions are permanently denied.'),
           ),
         );
-        setState(() {
-          _isLocationLoading = false;
-        });
+        setState(() => _isLocationLoading = false);
         return;
       }
 
-      // Get the current position
       Position position = await Geolocator.getCurrentPosition(
         desiredAccuracy: LocationAccuracy.high,
       );
-
       setState(() {
         _currentPosition = position;
         _isLocationLoading = false;
-
-        // Add a marker for the user's location
-        _markers.add(
-          Marker(
-            markerId: const MarkerId('user_location'),
-            position: LatLng(position.latitude, position.longitude),
-            infoWindow: const InfoWindow(
-              title: 'Your Location',
-              snippet: 'You are here',
-            ),
-            icon: BitmapDescriptor.defaultMarkerWithHue(
-              BitmapDescriptor.hueGreen,
-            ),
-          ),
-        );
-
-        // Move the camera to the user's location if the map is already created
         if (mapController != null) {
           mapController!.animateCamera(
             CameraUpdate.newCameraPosition(
@@ -525,15 +652,14 @@ class _MapScreenState extends State<MapScreen> {
             ),
           );
         }
+        _updateMarkers();
       });
     } catch (e) {
       print('Error getting location: $e');
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text('Error getting location: $e')));
-      setState(() {
-        _isLocationLoading = false;
-      });
+      setState(() => _isLocationLoading = false);
     }
   }
 
@@ -574,10 +700,9 @@ class _MapScreenState extends State<MapScreen> {
                   zoom: 8.0,
                 ),
                 markers: _markers,
-                myLocationEnabled:
-                    true, // This shows the blue dot for the user's location
-                myLocationButtonEnabled:
-                    true, // This adds the default "My Location" button
+                polylines: _polylines,
+                myLocationEnabled: true,
+                myLocationButtonEnabled: true,
                 zoomControlsEnabled: true,
               ),
           Positioned(
@@ -615,9 +740,7 @@ class _MapScreenState extends State<MapScreen> {
                       vertical: 15,
                     ),
                   ),
-                  onChanged: (value) {
-                    _searchPlaces(value);
-                  },
+                  onChanged: (value) => _searchPlaces(value),
                 ),
                 if (_isSearching && _predictions.isNotEmpty)
                   Container(
@@ -631,9 +754,7 @@ class _MapScreenState extends State<MapScreen> {
                         return ListTile(
                           leading: const Icon(Icons.location_on),
                           title: Text(place['displayName']['text'] ?? ''),
-                          onTap: () {
-                            _selectPlace(place);
-                          },
+                          onTap: () => _selectPlace(place),
                         );
                       },
                     ),
@@ -649,8 +770,7 @@ class _MapScreenState extends State<MapScreen> {
         mainAxisAlignment: MainAxisAlignment.end,
         children: [
           FloatingActionButton(
-            onPressed:
-                _getUserLocation, // Add a button to get the user's location
+            onPressed: _getUserLocation,
             child: const Icon(Icons.my_location),
             tooltip: 'Get My Location',
             heroTag: 'getLocation',
@@ -662,6 +782,7 @@ class _MapScreenState extends State<MapScreen> {
                 _markers.removeWhere(
                   (marker) => marker.markerId.value == 'searched_place',
                 );
+                _polylines.clear();
                 _updateMarkers();
                 mapController?.animateCamera(
                   CameraUpdate.newCameraPosition(
@@ -679,6 +800,168 @@ class _MapScreenState extends State<MapScreen> {
           ),
         ],
       ),
+    );
+  }
+
+  Future<void> _fetchTravelInfoForNearbyStations(
+    List<RailwayStation> nearbyStations,
+  ) async {
+    if (nearbyStations.isEmpty || _currentPosition == null) return;
+
+    final apiKey = dotenv.get('GOOGLE_MAPS_API_KEY');
+    final origin = LatLng(
+      _currentPosition!.latitude,
+      _currentPosition!.longitude,
+    );
+    List<Map<String, dynamic>> travelInfoList = [];
+
+    await Future.wait(
+      nearbyStations.map((station) async {
+        final destination = LatLng(station.latitude, station.longitude);
+        final url = Uri.parse(
+          'https://routes.googleapis.com/directions/v2:computeRoutes?key=$apiKey',
+        );
+
+        final Map<String, dynamic> body = {
+          'origin': {
+            'location': {
+              'latLng': {
+                'latitude': origin.latitude,
+                'longitude': origin.longitude,
+              },
+            },
+          },
+          'destination': {
+            'location': {
+              'latLng': {
+                'latitude': destination.latitude,
+                'longitude': destination.longitude,
+              },
+            },
+          },
+          'travelMode': 'DRIVE',
+          'routingPreference': 'TRAFFIC_AWARE',
+          'computeAlternativeRoutes': false,
+          'languageCode': 'en',
+        };
+
+        try {
+          final response = await http.post(
+            url,
+            headers: {
+              'Content-Type': 'application/json',
+              'X-Goog-FieldMask':
+                  'routes.duration,routes.distanceMeters,routes.legs',
+              'X-Ios-Bundle-Identifier': 'com.example.frontend',
+            },
+            body: jsonEncode(body),
+          );
+
+          if (response.statusCode == 200) {
+            final data = json.decode(response.body);
+            if (data['routes'] != null && data['routes'].isNotEmpty) {
+              final route = data['routes'][0];
+              final distanceMeters = route['distanceMeters'];
+              final durationSeconds = int.parse(
+                route['duration'].replaceAll('s', ''),
+              );
+
+              final distanceKm = (distanceMeters / 1000).toStringAsFixed(2);
+              final durationMinutes = (durationSeconds / 60).round();
+
+              travelInfoList.add({
+                'station': station,
+                'distance': '$distanceKm km',
+                'duration': '$durationMinutes mins',
+              });
+            } else {
+              travelInfoList.add({
+                'station': station,
+                'distance': 'N/A',
+                'duration': 'No transit info',
+              });
+            }
+          } else {
+            print(
+              'Failed to fetch routes for ${station.name}: ${response.body}',
+            );
+            travelInfoList.add({
+              'station': station,
+              'distance': 'Error',
+              'duration': 'Error',
+            });
+          }
+        } catch (e) {
+          print('Error fetching routes for ${station.name}: $e');
+          travelInfoList.add({
+            'station': station,
+            'distance': 'Error',
+            'duration': 'Error',
+          });
+        }
+      }),
+    );
+
+    travelInfoList.sort((a, b) {
+      final aDist =
+          double.tryParse(a['distance'].replaceAll(' km', '')) ??
+          double.infinity;
+      final bDist =
+          double.tryParse(b['distance'].replaceAll(' km', '')) ??
+          double.infinity;
+      return aDist.compareTo(bDist);
+    });
+
+    _showNearbyStationsSheet(travelInfoList);
+  }
+
+  void _showNearbyStationsSheet(List<Map<String, dynamic>> travelInfoList) {
+    showModalBottomSheet(
+      context: context,
+      builder:
+          (context) => Container(
+            padding: const EdgeInsets.all(16.0),
+            height: 300,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Nearby Railway Stations (within 10km)',
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 10),
+                Expanded(
+                  child: ListView.builder(
+                    itemCount: travelInfoList.length,
+                    itemBuilder: (context, index) {
+                      final info = travelInfoList[index];
+                      final station = info['station'] as RailwayStation;
+                      final distance = info['distance'] as String;
+                      final duration = info['duration'] as String;
+                      return ListTile(
+                        title: Text(station.name),
+                        subtitle: Text('Distance: $distance, Time: $duration'),
+                        onTap: () {
+                          mapController?.animateCamera(
+                            CameraUpdate.newCameraPosition(
+                              CameraPosition(
+                                target: LatLng(
+                                  station.latitude,
+                                  station.longitude,
+                                ),
+                                zoom: 15.0,
+                              ),
+                            ),
+                          );
+                          Navigator.pop(context);
+                        },
+                      );
+                    },
+                  ),
+                ),
+              ],
+            ),
+          ),
     );
   }
 }
