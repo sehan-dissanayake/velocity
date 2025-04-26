@@ -185,31 +185,47 @@ class WebSocketManager {
     try {
       // Parse data and setup
       const { uid, reader_id } = JSON.parse(scanData);
-      const currentDateTime = "2025-03-22 19:45:04";
+      const currentDateTime = new Date().toISOString().slice(0, 19).replace('T', ' ');
       const currentUser = "ashiduDissanayake";
-      const userId = 12;
+      const userId = 1;
       
-      // Begin transaction directly on the pool
-      await db.promise().query('START TRANSACTION');
+      // Begin transaction using promise wrapper around callback
+      await new Promise((resolve, reject) => {
+        db.beginTransaction(err => {
+          if (err) reject(err);
+          else resolve();
+        });
+      });
       
       try {
-        // Execute queries in transaction
-        const [userRows] = await db.promise().query(
-          "SELECT isLogged, balance FROM users WHERE id = ?", 
-          [userId]
-        );
+        // 1. Get user data
+        const userRows = await new Promise((resolve, reject) => {
+          db.query(
+            "SELECT isLogged, balance FROM users WHERE id = ?", 
+            [userId],
+            (err, results) => {
+              if (err) reject(err);
+              else resolve(results);
+            }
+          );
+        });
         
         if (userRows.length === 0) {
-          await db.promise().query('ROLLBACK');
+          await new Promise((resolve, reject) => {
+            db.rollback(err => {
+              if (err) reject(err);
+              else resolve();
+            });
+          });
           return { success: false, error: "User not found" };
         }
         
-        // 2. Process user data
+        // Process user data
         let { isLogged, balance } = userRows[0];
         balance = parseFloat(balance) || 0; // Ensure balance is a number
         console.log(`User isLogged: ${isLogged}, balance: ${balance}`);
         
-        // 3. Determine station and fare
+        // Determine station and fare
         let message = "";
         let deduct = 0;
         let stationName = "";
@@ -228,27 +244,44 @@ class WebSocketManager {
           message = `Boarded Udarata Manike train at ${stationName}`;
         }
         
-        // 4. Calculate new balance (ensure it doesn't go negative)
+        // Calculate new balance (ensure it doesn't go negative)
         const newBalance = Math.max(balance - deduct, 0);
         
-        // 5. Update user data
-        await db.promise().query(
-          "UPDATE users SET balance = ?, isLogged = ? WHERE id = ?",
-          [newBalance, isLogged, userId]
-        );
-        
-        // 6. Record transaction if fare was deducted
-        if (deduct > 0) {
-          await db.promise().query(
-            "INSERT INTO transactions (user_id, type, amount, balance_after, transaction_date) VALUES (?, ?, ?, ?, NOW())",
-            [userId, "transfer_sent", -deduct, newBalance]
+        // Update user data
+        await new Promise((resolve, reject) => {
+          db.query(
+            "UPDATE users SET balance = ?, isLogged = ? WHERE id = ?",
+            [newBalance, isLogged, userId],
+            (err, results) => {
+              if (err) reject(err);
+              else resolve(results);
+            }
           );
+        });
+        
+        // Record transaction if fare was deducted
+        if (deduct > 0) {
+          await new Promise((resolve, reject) => {
+            db.query(
+              "INSERT INTO transactions (user_id, type, amount, balance_after, transaction_date) VALUES (?, ?, ?, ?, NOW())",
+              [userId, "transfer_sent", -deduct, newBalance],
+              (err, results) => {
+                if (err) reject(err);
+                else resolve(results);
+              }
+            );
+          });
         }
         
-        // 8. Commit transaction
-        await db.promise().commit();
+        // Commit transaction
+        await new Promise((resolve, reject) => {
+          db.commit(err => {
+            if (err) reject(err);
+            else resolve();
+          });
+        });
         
-        // 9. Send notification
+        // Send notification
         this.createNotification(
           userId,
           "VeloCiti Travel Update",
@@ -279,12 +312,11 @@ class WebSocketManager {
         
       } catch (dbError) {
         // Roll back transaction in case of any error
-        await db.promise().rollback();
+        await new Promise((resolve) => {
+          db.rollback(() => resolve());
+        });
         console.error("Database error in RFID scan:", dbError);
         return { success: false, error: dbError.message };
-      } finally {
-        // Always release db.promise()
-        db.promise().release();
       }
       
     } catch (error) {
@@ -294,7 +326,7 @@ class WebSocketManager {
   }
 
   getUserFromReader(readerId) {
-    return 12; // Return actual user ID
+    return 1; // Return actual user ID
   }
 
   // Broadcast to all users in a group

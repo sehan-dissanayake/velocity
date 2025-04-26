@@ -11,7 +11,7 @@ const connection = mysql.createConnection({
   database: process.env.DB_NAME,
   port: process.env.DB_PORT,
   ssl: {
-    ca: fs.readFileSync(path.join(__dirname, "ca.pem")),
+    ca: fs.readFileSync(path.join(__dirname, "./ca.pem")),
   },
   waitForConnections: true,
   connectionLimit: 10,

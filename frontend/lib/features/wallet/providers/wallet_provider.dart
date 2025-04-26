@@ -58,6 +58,36 @@ class WalletProvider extends ChangeNotifier {
     loadWalletData();
   }
   
+  // Transfer money to another user
+  Future<Map<String, dynamic>> transferMoney(String recipientCardNumber, double amount) async {
+    _isLoading = true;
+    notifyListeners();
+    
+    try {
+      final response = await ApiWithAuthService.post('wallet/transfer', {
+        'recipient_card_number': recipientCardNumber,
+        'amount': amount,
+      });
+      
+      // Update wallet data after successful transfer
+      await loadWalletData();
+      
+      return {
+        'success': true,
+        'message': 'Transfer successful',
+        'data': response,
+      };
+    } catch (e) {
+      return {
+        'success': false,
+        'message': e.toString(),
+      };
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
+  }
+  
   // Dispose of resources
   void dispose() {
     _walletUpdateController.close();

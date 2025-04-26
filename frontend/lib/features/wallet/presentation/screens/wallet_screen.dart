@@ -100,7 +100,261 @@ class _WalletScreenState extends State<WalletScreen> with SingleTickerProviderSt
   }
 
   void _showTransferDialog() {
-    // Your existing transfer dialog code...
+    final TextEditingController recipientController = TextEditingController();
+    final TextEditingController amountController = TextEditingController();
+    final formKey = GlobalKey<FormState>();
+    bool isProcessing = false;
+    
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (BuildContext context) {
+        return StatefulBuilder(
+          builder: (context, setState) {
+            return AlertDialog(
+              backgroundColor: const Color(0xFF1E2126),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+              ),
+              title: Row(
+                children: [
+                  Icon(
+                    Icons.send_rounded,
+                    color: Colors.amber,
+                    size: 24,
+                  ),
+                  const SizedBox(width: 10),
+                  Text(
+                    "Send Money",
+                    style: GoogleFonts.montserrat(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
+                    ),
+                  ),
+                ],
+              ),
+              content: Form(
+                key: formKey,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    TextFormField(
+                      controller: recipientController,
+                      style: GoogleFonts.montserrat(color: Colors.white),
+                      decoration: InputDecoration(
+                        labelText: "Recipient Card Number",
+                        labelStyle: GoogleFonts.montserrat(color: Colors.grey.shade400),
+                        hintText: "XXXX XXXX XXXX XXXX",
+                        hintStyle: GoogleFonts.montserrat(color: Colors.grey.shade600),
+                        prefixIcon: Icon(Icons.credit_card, color: Colors.grey.shade400),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: BorderSide(color: Colors.grey.shade700),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: BorderSide(color: Colors.amber),
+                        ),
+                        errorBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: BorderSide(color: Colors.red.shade400),
+                        ),
+                        focusedErrorBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: BorderSide(color: Colors.red.shade400),
+                        ),
+                        filled: true,
+                        fillColor: Colors.black.withOpacity(0.2),
+                      ),
+                      validator: (value) {
+                        if (value == null || value.isEmpty) {
+                          return 'Please enter recipient card number';
+                        }
+                        // Basic validation for card number format
+                        final cardNumber = value.replaceAll(' ', '');
+                        if (cardNumber.length != 16) {
+                          return 'Card number must be 16 digits';
+                        }
+                        return null;
+                      },
+                    ),
+                    const SizedBox(height: 16),
+                    TextFormField(
+                      controller: amountController,
+                      style: GoogleFonts.montserrat(color: Colors.white),
+                      keyboardType: TextInputType.number,
+                      decoration: InputDecoration(
+                        labelText: "Amount (Rs.)",
+                        labelStyle: GoogleFonts.montserrat(color: Colors.grey.shade400),
+                        hintText: "0.00",
+                        hintStyle: GoogleFonts.montserrat(color: Colors.grey.shade600),
+                        prefixIcon: Icon(Icons.attach_money, color: Colors.grey.shade400),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: BorderSide(color: Colors.grey.shade700),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: BorderSide(color: Colors.amber),
+                        ),
+                        errorBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: BorderSide(color: Colors.red.shade400),
+                        ),
+                        focusedErrorBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: BorderSide(color: Colors.red.shade400),
+                        ),
+                        filled: true,
+                        fillColor: Colors.black.withOpacity(0.2),
+                      ),
+                      validator: (value) {
+                        if (value == null || value.isEmpty) {
+                          return 'Please enter amount';
+                        }
+                        final amount = double.tryParse(value);
+                        if (amount == null || amount <= 0) {
+                          return 'Please enter a valid amount';
+                        }
+                        
+                        // Check if user has sufficient balance
+                        final walletProvider = Provider.of<WalletProvider>(context, listen: false);
+                        if (walletProvider.balance != null && amount > walletProvider.balance!) {
+                          return 'Insufficient balance';
+                        }
+                        
+                        return null;
+                      },
+                    ),
+                    const SizedBox(height: 24),
+                    if (isProcessing)
+                      const Center(
+                        child: CircularProgressIndicator(
+                          color: Colors.amber,
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () {
+                    Navigator.of(context).pop();
+                  },
+                  child: Text(
+                    "Cancel",
+                    style: GoogleFonts.montserrat(
+                      color: Colors.grey.shade400,
+                    ),
+                  ),
+                ),
+                ElevatedButton(
+                  onPressed: isProcessing
+                      ? null
+                      : () async {
+                          if (formKey.currentState!.validate()) {
+                            setState(() {
+                              isProcessing = true;
+                            });
+                            
+                            try {
+                              final recipientCardNumber = recipientController.text.replaceAll(' ', '');
+                              final amount = double.parse(amountController.text);
+                              
+                              // Make API call to transfer money
+                              final walletProvider = Provider.of<WalletProvider>(context, listen: false);
+                              final result = await walletProvider.transferMoney(recipientCardNumber, amount);
+                              
+                              // Close dialog
+                              Navigator.of(context).pop();
+                              
+                              if (result['success']) {
+                                // Show success message
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Row(
+                                      children: [
+                                        const Icon(Icons.check_circle, color: Colors.white),
+                                        const SizedBox(width: 12),
+                                        Text(
+                                          result['message'],
+                                          style: GoogleFonts.montserrat(),
+                                        ),
+                                      ],
+                                    ),
+                                    behavior: SnackBarBehavior.floating,
+                                    backgroundColor: Colors.green.shade700,
+                                    margin: const EdgeInsets.all(16),
+                                  ),
+                                );
+                              } else {
+                                // Show error message
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Row(
+                                      children: [
+                                        const Icon(Icons.error_outline, color: Colors.white),
+                                        const SizedBox(width: 12),
+                                        Text(
+                                          'Transfer failed: ${result['message']}',
+                                          style: GoogleFonts.montserrat(),
+                                        ),
+                                      ],
+                                    ),
+                                    behavior: SnackBarBehavior.floating,
+                                    backgroundColor: Colors.red.shade700,
+                                    margin: const EdgeInsets.all(16),
+                                  ),
+                                );
+                              }
+                            } catch (e) {
+                              setState(() {
+                                isProcessing = false;
+                              });
+                              
+                              // Show error message
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Row(
+                                    children: [
+                                      const Icon(Icons.error_outline, color: Colors.white),
+                                      const SizedBox(width: 12),
+                                      Text(
+                                        'Transfer failed: ${e.toString()}',
+                                        style: GoogleFonts.montserrat(),
+                                      ),
+                                    ],
+                                  ),
+                                  behavior: SnackBarBehavior.floating,
+                                  backgroundColor: Colors.red.shade700,
+                                  margin: const EdgeInsets.all(16),
+                                ),
+                              );
+                            }
+                          }
+                        },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.amber,
+                    foregroundColor: Colors.black,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                  ),
+                  child: Text(
+                    "Send",
+                    style: GoogleFonts.montserrat(
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
   }
 
   @override
